@@ -4,13 +4,13 @@ from typing import Optional, Dict, Any, Iterable, Tuple, List
 
 class VerificationDB:
     """
-    SQLite helper for your schema with:
-      • add / update / delete for each table
-      • lookup helpers to get `id` using any other field(s)
+    SQLite helper matching fluid.db.sql schema exactly.
 
-    Notes:
-      - All tables use 'id' as PRIMARY KEY AUTOINCREMENT
-      - FK definitions reference proper id fields
+    Tables:
+      - itemtypes: id (PK), typename (UNIQUE)
+      - items: id (PK), itemname, fkitemtype
+      - itemcharacteristics: id (PK), fkitem, itemkey, itemvalue, itemkeyvaluetype
+      - itemloading: id (PK), fkitem, dailyrollupexists, monthyear, percent
     """
 
     def __init__(self, path: str):
@@ -50,9 +50,7 @@ class VerificationDB:
         return self.con.execute(sql, params)
 
     def _update_set_clause(self, data: Dict[str, Any]) -> Tuple[str, Tuple[Any, ...]]:
-        """
-        Build a 'SET col1=?, col2=?' clause from a dict, skipping None values.
-        """
+        """Build a 'SET col1=?, col2=?' clause from a dict, skipping None values."""
         cols, vals = [], []
         for k, v in data.items():
             if v is not None:
@@ -68,9 +66,7 @@ class VerificationDB:
             id_col: str,
             filters: Dict[str, Any],
     ) -> List[int]:
-        """
-        Generic: return list of ids for rows in `table` that match non-None filters.
-        """
+        """Generic: return list of ids for rows in table that match non-None filters."""
         where_parts, params = [], []
         for col, val in filters.items():
             if val is not None:
@@ -90,30 +86,35 @@ class VerificationDB:
     # ====================================================
 
     def add_itemtype(self, typename: str) -> int:
-        """Insert a new item type. Returns new row PK (itemtypes.id)."""
+        """Insert a new item type. Returns new row id."""
         cur = self._execute('INSERT INTO "itemtypes" ("typename") VALUES (?);', (typename,))
         return cur.lastrowid
 
     def update_itemtype(self, id: int, typename: Optional[str] = None) -> None:
-        """Update fields for itemtypes by primary key."""
+        """Update itemtype by id."""
         set_clause, params = self._update_set_clause({"typename": typename})
         self._execute(f'UPDATE "itemtypes" SET {set_clause} WHERE "id" = ?;', params + (id,))
 
     def delete_itemtype(self, id: int) -> None:
-        """Delete an itemtype by primary key."""
+        """Delete itemtype by id."""
         self._execute('DELETE FROM "itemtypes" WHERE "id" = ?;', (id,))
 
     def get_itemtype_id_by_typename(self, typename: str) -> Optional[int]:
-        """Return the id for an itemtype by typename (None if not found)."""
+        """Return the id for an itemtype by typename."""
         ids = self._indices_by_fields("itemtypes", "id", {"typename": typename})
         return ids[0] if ids else None
+
+    def get_itemtype_by_id(self, id: int) -> Optional[sqlite3.Row]:
+        """Get itemtype row by id."""
+        cur = self._execute('SELECT * FROM "itemtypes" WHERE "id" = ?;', (id,))
+        return cur.fetchone()
 
     # ====================================================
     # items
     # ====================================================
 
     def add_item(self, itemname: str, fkitemtype: int) -> int:
-        """Insert into items. Returns auto-generated id."""
+        """Insert item. Returns auto-generated id."""
         cur = self._execute(
             'INSERT INTO "items" ("itemname","fkitemtype") VALUES (?,?);',
             (itemname, fkitemtype),
@@ -126,26 +127,28 @@ class VerificationDB:
             itemname: Optional[str] = None,
             fkitemtype: Optional[int] = None,
     ) -> None:
-        """Update items row identified by its id."""
+        """Update item by id."""
         set_clause, params = self._update_set_clause(
             {"itemname": itemname, "fkitemtype": fkitemtype}
         )
         self._execute(f'UPDATE "items" SET {set_clause} WHERE "id" = ?;', params + (id,))
 
     def delete_item(self, id: int) -> None:
-        """Delete an item by its id."""
+        """Delete item by id."""
         self._execute('DELETE FROM "items" WHERE "id" = ?;', (id,))
 
     def get_item_by_id(self, id: int) -> Optional[sqlite3.Row]:
+        """Get item by id."""
         cur = self._execute('SELECT * FROM "items" WHERE "id" = ?;', (id,))
         return cur.fetchone()
 
     def get_item_by_name(self, itemname: str) -> Optional[sqlite3.Row]:
+        """Get item by name."""
         cur = self._execute('SELECT * FROM "items" WHERE "itemname" = ?;', (itemname,))
         return cur.fetchone()
 
     def get_item_id_by_name(self, itemname: str) -> Optional[int]:
-        """Return items.id for a given itemname (None if not found)."""
+        """Return items.id for a given itemname."""
         ids = self._indices_by_fields("items", "id", {"itemname": itemname})
         return ids[0] if ids else None
 
@@ -160,9 +163,7 @@ class VerificationDB:
             itemvalue: str,
             itemkeyvaluetype: Optional[str] = None,
     ) -> int:
-        """
-        Insert into itemcharacteristics. Returns auto-generated id.
-        """
+        """Insert characteristic. Returns auto-generated id."""
         cur = self._execute(
             'INSERT INTO "itemcharacteristics" ("fkitem","itemkey","itemvalue","itemkeyvaluetype") '
             'VALUES (?,?,?,?);',
@@ -178,7 +179,7 @@ class VerificationDB:
             itemvalue: Optional[str] = None,
             itemkeyvaluetype: Optional[str] = None,
     ) -> None:
-        """Update itemcharacteristics by primary key 'id'."""
+        """Update itemcharacteristic by id."""
         set_clause, params = self._update_set_clause(
             {
                 "fkitem": fkitem,
@@ -193,8 +194,13 @@ class VerificationDB:
         )
 
     def delete_itemcharacteristic(self, id: int) -> None:
-        """Delete from itemcharacteristics by primary key 'id'."""
+        """Delete itemcharacteristic by id."""
         self._execute('DELETE FROM "itemcharacteristics" WHERE "id" = ?;', (id,))
+
+    def get_itemcharacteristic_by_id(self, id: int) -> Optional[sqlite3.Row]:
+        """Get itemcharacteristic by id."""
+        cur = self._execute('SELECT * FROM "itemcharacteristics" WHERE "id" = ?;', (id,))
+        return cur.fetchone()
 
     def find_itemcharacteristics_ids(
             self,
@@ -203,7 +209,7 @@ class VerificationDB:
             itemvalue: Optional[str] = None,
             itemkeyvaluetype: Optional[str] = None,
     ) -> List[int]:
-        """Return list of itemcharacteristics.id values matching provided filters."""
+        """Return list of itemcharacteristics.id values matching filters."""
         return self._indices_by_fields(
             "itemcharacteristics",
             "id",
@@ -226,7 +232,7 @@ class VerificationDB:
             monthyear: str,
             percent: float,
     ) -> int:
-        """Insert into itemloading. Returns auto-generated id."""
+        """Insert itemloading. Returns auto-generated id."""
         cur = self._execute(
             'INSERT INTO "itemloading" ("fkitem","dailyrollupexists","monthyear","percent") '
             'VALUES (?,?,?,?);',
@@ -242,7 +248,7 @@ class VerificationDB:
             monthyear: Optional[str] = None,
             percent: Optional[float] = None,
     ) -> None:
-        """Update itemloading by primary key 'id'."""
+        """Update itemloading by id."""
         set_clause, params = self._update_set_clause(
             {
                 "fkitem": fkitem,
@@ -254,14 +260,16 @@ class VerificationDB:
         self._execute(f'UPDATE "itemloading" SET {set_clause} WHERE "id" = ?;', params + (id,))
 
     def delete_loading(self, id: int) -> None:
-        """Delete from itemloading by primary key 'id'."""
+        """Delete itemloading by id."""
         self._execute('DELETE FROM "itemloading" WHERE "id" = ?;', (id,))
 
+    def get_loading_by_id(self, id: int) -> Optional[sqlite3.Row]:
+        """Get itemloading by id."""
+        cur = self._execute('SELECT * FROM "itemloading" WHERE "id" = ?;', (id,))
+        return cur.fetchone()
+
     def upsert_loading(self, fkitem: int, monthyear: str, percent: float) -> None:
-        """
-        Insert or update loading percentage for a given item and month.
-        Uses dailyrollupexists=0 as default for new records.
-        """
+        """Insert or update loading percentage for item and month."""
         cur = self._execute(
             'SELECT "id" FROM "itemloading" WHERE "fkitem" = ? AND "monthyear" = ?;',
             (fkitem, monthyear),
@@ -277,9 +285,7 @@ class VerificationDB:
             self.add_loading(fkitem, 0, monthyear, percent)
 
     def get_loadings_for_items(self, item_ids: List[int]) -> Dict[Tuple[int, str], float]:
-        """
-        Return dict of (item_id, monthyear) -> percent for given items.
-        """
+        """Return dict of (item_id, monthyear) -> percent for given items."""
         if not item_ids:
             return {}
 
@@ -300,12 +306,17 @@ class VerificationDB:
             self,
             fkitem: Optional[int] = None,
             monthyear: Optional[str] = None,
+            dailyrollupexists: Optional[int] = None,
     ) -> List[int]:
-        """Return list of itemloading.id values matching provided filters."""
+        """Return list of itemloading.id values matching filters."""
         return self._indices_by_fields(
             "itemloading",
             "id",
-            {"fkitem": fkitem, "monthyear": monthyear},
+            {
+                "fkitem": fkitem,
+                "monthyear": monthyear,
+                "dailyrollupexists": dailyrollupexists,
+            },
         )
 
     # ====================================================
@@ -313,17 +324,21 @@ class VerificationDB:
     # ====================================================
 
     def list_items(self) -> Iterable[sqlite3.Row]:
+        """Get all items ordered by id."""
         return self._execute('SELECT * FROM "items" ORDER BY "id";').fetchall()
 
     def list_itemtypes(self) -> Iterable[sqlite3.Row]:
+        """Get all itemtypes ordered by id."""
         return self._execute('SELECT * FROM "itemtypes" ORDER BY "id";').fetchall()
 
     def list_characteristics_for_item(self, fkitem: int) -> Iterable[sqlite3.Row]:
+        """Get all characteristics for an item."""
         return self._execute(
             'SELECT * FROM "itemcharacteristics" WHERE "fkitem" = ? ORDER BY "id";', (fkitem,)
         ).fetchall()
 
     def list_loadings_for_item(self, fkitem: int) -> Iterable[sqlite3.Row]:
+        """Get all loadings for an item."""
         return self._execute(
             'SELECT * FROM "itemloading" WHERE "fkitem" = ? ORDER BY "monthyear";', (fkitem,)
         ).fetchall()
@@ -334,3 +349,12 @@ class VerificationDB:
             'SELECT DISTINCT "monthyear" FROM "itemloading" ORDER BY "monthyear";'
         )
         return [row["monthyear"] for row in cur.fetchall()]
+
+    # ====================================================
+    # Convenience helpers
+    # ====================================================
+
+    def resolve_fkitem_from_name(self, itemname: str) -> Optional[int]:
+        """Return items.id for a given itemname, or None if not found."""
+        row = self.get_item_by_name(itemname)
+        return int(row["id"]) if row else None

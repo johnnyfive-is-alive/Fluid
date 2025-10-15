@@ -2,11 +2,14 @@ from flask import Flask, render_template, g
 from db.fluiddbinterface import VerificationDB
 import os
 
-# Path to your existing SQLite file (adjust as needed)
-DB_PATH = 'src/db/fluid.db'
+# Get the directory where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Path to your existing SQLite file (relative to app.py)
+DB_PATH = os.path.join(BASE_DIR, 'db', 'fluid.db')
 
 # Ensure the extra table exists on startup
-EXTRA_SCHEMA_PATH = 'schema_extras.sql'
+EXTRA_SCHEMA_PATH = os.path.join(BASE_DIR, 'schema_extras.sql')
 
 
 def get_db() -> VerificationDB:
