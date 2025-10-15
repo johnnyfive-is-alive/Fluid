@@ -8,27 +8,73 @@
 <link href="{{ url_for('static', filename='app.css') }}" rel="stylesheet">
 </head>
 <body>
+<!-- Navigation bar with dropdown menus for better organization -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
 <div class="container-fluid">
 <a class="navbar-brand" href="/">Verification DB</a>
-<div class="navbar-nav">
-<a class="nav-link" href="{{ url_for('characteristics.form') }}">Characteristics</a>
+<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+<span class="navbar-toggler-icon"></span>
+</button>
+<div class="collapse navbar-collapse" id="navbarNav">
+<ul class="navbar-nav">
+<!-- Item Types dropdown -->
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+Item Types
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item" href="{{ url_for('itemtypes.list_types') }}">View All</a></li>
+<li><a class="dropdown-item" href="{{ url_for('itemtypes.add_form') }}">Add New</a></li>
+</ul>
+</li>
+<!-- Items dropdown -->
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+Items
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item" href="{{ url_for('items.list_items') }}">View All</a></li>
+<li><a class="dropdown-item" href="{{ url_for('items.add_form') }}">Add New</a></li>
+</ul>
+</li>
+<!-- Characteristics dropdown -->
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+Characteristics
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item" href="{{ url_for('characteristics.list_characteristics') }}">View All</a></li>
+<li><a class="dropdown-item" href="{{ url_for('characteristics.add_form') }}">Add New</a></li>
+</ul>
+</li>
+<!-- Loading Grid - single link -->
+<li class="nav-item">
 <a class="nav-link" href="{{ url_for('loading.grid_selector') }}">Loading Grid</a>
+</li>
+</ul>
 </div>
 </div>
 </nav>
+
 <div class="container">
+<!-- Flash messages for user feedback -->
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
 <div class="mt-2">
 {% for category, message in messages %}
-<div class="alert alert-{{ category }}">{{ message }}</div>
+<div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+{{ message }}
+<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
 {% endfor %}
 </div>
 {% endif %}
 {% endwith %}
+
+<!-- Page content goes here -->
 {% block content %}{% endblock %}
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

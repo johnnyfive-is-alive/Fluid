@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Edit Item</h2>
+
+<!-- Edit form -->
+<div class="card">
+<div class="card-body">
+<form method="post" action="{{ url_for('items.edit_item', id=item['id']) }}">
+<div class="mb-3">
+<label class="form-label">ID (read-only)</label>
+<input type="text" class="form-control" value="{{ item['id'] }}" disabled>
+</div>
+
+<div class="mb-3">
+<label for="itemname" class="form-label">Item Name</label>
+<input type="text"
+       class="form-control"
+       id="itemname"
+       name="itemname"
+       value="{{ item['itemname'] }}"
+       required>
+<div class="form-text">
+Enter a descriptive name for the item. Must be unique.
+</div>
+</div>
+
+<div class="mb-3">
+<label for="fkitemtype" class="form-label">Item Type</label>
+<select class="form-select" id="fkitemtype" name="fkitemtype" required>
+{% for it in itemtypes %}
+<option value="{{ it['id'] }}" {% if it['id'] == item['fkitemtype'] %}selected{% endif %}>
+{{ it['typename'] }}
+</option>
+{% endfor %}
+</select>
+</div>
+
+<!-- Action buttons -->
+<button type="submit" class="btn btn-primary">Update Item</button>
+<a href="{{ url_for('items.list_items') }}" class="btn btn-secondary">Cancel</a>
+</form>
+</div>
+</div>
+
+<!-- Related data info -->
+<div class="alert alert-info mt-4">
+<strong>Related Data:</strong> This item may have characteristics and loading data.
+Changing the item type won't affect related data, but deleting the item will remove all associated data.
+</div>
+{% endblock %}

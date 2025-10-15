@@ -1,7 +1,138 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="p-4 bg-light rounded-3">
-<h1 class="display-6">Welcome</h1>
-<p class="lead mb-0">Use the navigation to add characteristics or edit loading percentages.</p>
+<!-- Welcome header -->
+<div class="p-5 bg-light rounded-3 mb-4">
+<h1 class="display-5">Verification Database Manager</h1>
+<p class="lead">
+Manage your items, types, characteristics, and loading percentages in one place.
+</p>
+</div>
+
+<!-- Quick navigation cards -->
+<div class="row g-4">
+<!-- Item Types card -->
+<div class="col-md-6">
+<div class="card h-100">
+<div class="card-body">
+<h5 class="card-title">📋 Item Types</h5>
+<p class="card-text">
+Define categories for your items (e.g., STATION, RESOURCE, UNIT).
+Start here if you're setting up a new database.
+</p>
+<a href="{{ url_for('itemtypes.list_types') }}" class="btn btn-primary">
+View Types
+</a>
+<a href="{{ url_for('itemtypes.add_form') }}" class="btn btn-outline-primary">
+Add Type
+</a>
+</div>
+</div>
+</div>
+
+<!-- Items card -->
+<div class="col-md-6">
+<div class="card h-100">
+<div class="card-body">
+<h5 class="card-title">📦 Items</h5>
+<p class="card-text">
+Create and manage items. Each item belongs to a type and can have
+characteristics and loading data.
+</p>
+<a href="{{ url_for('items.list_items') }}" class="btn btn-primary">
+View Items
+</a>
+<a href="{{ url_for('items.add_form') }}" class="btn btn-outline-primary">
+Add Item
+</a>
+</div>
+</div>
+</div>
+
+<!-- Characteristics card -->
+<div class="col-md-6">
+<div class="card h-100">
+<div class="card-body">
+<h5 class="card-title">🏷️ Characteristics</h5>
+<p class="card-text">
+Add key-value properties to items. Describe location, capacity, status,
+or any other attributes.
+</p>
+<a href="{{ url_for('characteristics.list_characteristics') }}" class="btn btn-primary">
+View Characteristics
+</a>
+<a href="{{ url_for('characteristics.add_form') }}" class="btn btn-outline-primary">
+Add Characteristic
+</a>
+</div>
+</div>
+</div>
+
+<!-- Loading Grid card -->
+<div class="col-md-6">
+<div class="card h-100">
+<div class="card-body">
+<h5 class="card-title">📊 Loading Grid</h5>
+<p class="card-text">
+Edit loading percentages for items across different months.
+View and update multiple items in a convenient grid format.
+</p>
+<a href="{{ url_for('loading.grid_selector') }}" class="btn btn-primary">
+Open Grid
+</a>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Getting Started guide -->
+<div class="card mt-4">
+<div class="card-header">
+<h5 class="mb-0">🚀 Getting Started</h5>
+</div>
+<div class="card-body">
+<ol>
+<li class="mb-2">
+<strong>Create Item Types:</strong> Define categories like STATION, RESOURCE, UNIT
+</li>
+<li class="mb-2">
+<strong>Add Items:</strong> Create items and assign them to types
+</li>
+<li class="mb-2">
+<strong>Add Characteristics:</strong> Describe your items with key-value properties
+</li>
+<li>
+<strong>Set Loading Percentages:</strong> Use the grid to manage monthly loading data
+</li>
+</ol>
+</div>
+</div>
+
+<!-- Database structure info -->
+<div class="card mt-4">
+<div class="card-header">
+<h5 class="mb-0">📖 Database Structure</h5>
+</div>
+<div class="card-body">
+<div class="row">
+<div class="col-md-6">
+<h6>Tables:</h6>
+<ul>
+<li><code>itemtypes</code> - Categories for items</li>
+<li><code>items</code> - The items being tracked</li>
+<li><code>itemcharacteristics</code> - Key-value properties</li>
+<li><code>itemloading</code> - Monthly loading percentages</li>
+</ul>
+</div>
+<div class="col-md-6">
+<h6>Relationships:</h6>
+<ul>
+<li>Items belong to one type</li>
+<li>Characteristics belong to one item</li>
+<li>Loading data belongs to one item</li>
+<li>Deleting items cascades to related data</li>
+</ul>
+</div>
+</div>
+</div>
 </div>
 {% endblock %}

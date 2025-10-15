@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Add Item Characteristic</h2>
+
+<!-- Add form -->
+<div class="card">
+<div class="card-body">
+<form method="post" action="{{ url_for('characteristics.add_characteristic') }}">
+<div class="mb-3">
+<label for="fkitem" class="form-label">Item</label>
+<select class="form-select" id="fkitem" name="fkitem" required>
+<option value="" selected disabled>Choose an item...</option>
+{% for it in items %}
+<option value="{{ it['id'] }}">[{{ it['id'] }}] {{ it['itemname'] }}</option>
+{% endfor %}
+</select>
+<div class="form-text">
+Select which item this characteristic belongs to.
+{% if not items %}
+<span class="text-danger">No items available! Create an item first.</span>
+{% endif %}
+</div>
+</div>
+
+<div class="row">
+<div class="col-md-4">
+<div class="mb-3">
+<label for="itemkey" class="form-label">Key</label>
+<input type="text" 
+       class="form-control" 
+       id="itemkey" 
+       name="itemkey" 
+       placeholder="e.g., Location, Capacity, Status" 
+       required>
+<div class="form-text">
+The characteristic name. Must be unique per item.
+</div>
+</div>
+</div>
+
+<div class="col-md-5">
+<div class="mb-3">
+<label for="itemvalue" class="form-label">Value</label>
+<input type="text" 
+       class="form-control" 
+       id="itemvalue" 
+       name="itemvalue" 
+       placeholder="e.g., Lab A, 500, Active">
+<div class="form-text">
+The characteristic value.
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="mb-3">
+<label for="itemkeyvaluetype" class="form-label">Value Type (optional)</label>
+<input type="text" 
+       class="form-control" 
+       id="itemkeyvaluetype" 
+       name="itemkeyvaluetype" 
+       placeholder="e.g., str, int, float">
+<div class="form-text">
+Data type hint.
+</div>
+</div>
+</div>
+</div>
+
+<!-- Action buttons -->
+<button type="submit" class="btn btn-primary" {% if not items %}disabled{% endif %}>
+Add Characteristic
+</button>
+<a href="{{ url_for('characteristics.list_characteristics') }}" class="btn btn-secondary">Cancel</a>
+
+{% if not items %}
+<div class="mt-3">
+<a href="{{ url_for('items.add_form') }}" class="btn btn-warning">
+Create Item First
+</a>
+</div>
+{% endif %}
+</form>
+</div>
+</div>
+
+<!-- Examples card -->
+<div class="card mt-4">
+<div class="card-body">
+<h5 class="card-title">Examples</h5>
+<table class="table table-sm">
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Location</code></td>
+<td>Lab A</td>
+<td>str</td>
+</tr>
+<tr>
+<td><code>Capacity</code></td>
+<td>500</td>
+<td>int</td>
+</tr>
+<tr>
+<td><code>Temperature</code></td>
+<td>72.5</td>
+<td>float</td>
+</tr>
+<tr>
+<td><code>Status</code></td>
+<td>Active</td>
+<td>str</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+{% endblock %}

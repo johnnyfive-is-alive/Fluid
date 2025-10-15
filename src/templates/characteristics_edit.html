@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Edit Characteristic</h2>
+
+<!-- Edit form -->
+<div class="card">
+<div class="card-body">
+<form method="post" action="{{ url_for('characteristics.edit_characteristic', id=characteristic['id']) }}">
+<div class="mb-3">
+<label class="form-label">ID (read-only)</label>
+<input type="text" class="form-control" value="{{ characteristic['id'] }}" disabled>
+</div>
+
+<div class="mb-3">
+<label class="form-label">Item (read-only)</label>
+<input type="text" class="form-control" 
+       value="[{{ characteristic['fkitem'] }}] {{ characteristic['itemname'] }}" 
+       disabled>
+<div class="form-text">
+Cannot change the item assignment. Delete and create new if needed.
+</div>
+</div>
+
+<div class="mb-3">
+<label class="form-label">Key (read-only)</label>
+<input type="text" class="form-control" 
+       value="{{ characteristic['itemkey'] }}" 
+       disabled>
+<div class="form-text">
+Cannot change the key due to unique constraint. Delete and create new if needed.
+</div>
+</div>
+
+<div class="mb-3">
+<label for="itemvalue" class="form-label">Value</label>
+<input type="text" 
+       class="form-control" 
+       id="itemvalue" 
+       name="itemvalue" 
+       value="{{ characteristic['itemvalue'] }}">
+<div class="form-text">
+Update the characteristic value.
+</div>
+</div>
+
+<div class="mb-3">
+<label for="itemkeyvaluetype" class="form-label">Value Type (optional)</label>
+<input type="text" 
+       class="form-control" 
+       id="itemkeyvaluetype" 
+       name="itemkeyvaluetype" 
+       value="{{ characteristic['itemkeyvaluetype'] or '' }}"
+       placeholder="e.g., str, int, float">
+<div class="form-text">
+Data type hint for the value.
+</div>
+</div>
+
+<!-- Action buttons -->
+<button type="submit" class="btn btn-primary">Update Characteristic</button>
+<a href="{{ url_for('characteristics.list_characteristics') }}" class="btn btn-secondary">Cancel</a>
+</form>
+</div>
+</div>
+
+<!-- Note about read-only fields -->
+<div class="alert alert-warning mt-4">
+<strong>Note:</strong> The Item and Key fields cannot be changed after creation due to 
+database constraints. If you need to change these, delete this characteristic and create a new one.
+</div>
+{% endblock %}
