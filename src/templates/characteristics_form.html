@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Add Item Characteristic</h2>
+<form method="post" action="{{ url_for('characteristics.add') }}" class="row g-3">
+<div class="col-md-4">
+<label class="form-label">Item</label>
+<select class="form-select" name="fkitem" required>
+{% for it in items %}
+<option value="{{ it['index'] }}">[{{ it['index'] }}] {{ it['itemname'] }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="col-md-3">
+<label class="form-label">Key</label>
+<input class="form-control" name="itemkey" placeholder="e.g. Location" required>
+</div>
+<div class="col-md-3">
+<label class="form-label">Value</label>
+<input class="form-control" name="itemvalue" placeholder="e.g. Lab A">
+</div>
+<div class="col-md-2">
+<label class="form-label">Value Type</label>
+<input class="form-control" name="itemkeyvaluetype" placeholder="e.g. str">
+</div>
+<div class="col-12">
+<button class="btn btn-primary" type="submit">Add</button>
+</div>
+</form>
+{% endblock %}
