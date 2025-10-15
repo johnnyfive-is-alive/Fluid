@@ -1,17 +1,16 @@
 import sqlite3
 from typing import Optional, Dict, Any, Iterable, Tuple, List
 
+
 class VerificationDB:
     """
     SQLite helper for your schema with:
       • add / update / delete for each table
-      • clear lookup helpers to get `index` using any other field(s)
+      • lookup helpers to get `id` using any other field(s)
 
     Notes:
-      - 'items.index' is UNIQUE (used as identifier here).
-      - FK definitions in the schema reference items(itemname), which SQLite
-        won't enforce as a real FK due to type mismatch; we still provide
-        convenience resolvers by name or index.
+      - All tables use 'id' as PRIMARY KEY AUTOINCREMENT
+      - FK definitions reference proper id fields
     """
 
     def __init__(self, path: str):
@@ -64,15 +63,13 @@ class VerificationDB:
         return ", ".join(cols), tuple(vals)
 
     def _indices_by_fields(
-        self,
-        table: str,
-        index_col: str,
-        filters: Dict[str, Any],
+            self,
+            table: str,
+            id_col: str,
+            filters: Dict[str, Any],
     ) -> List[int]:
         """
-        Generic: return list of indices for rows in `table` that match non-None filters.
-        Example:
-            _indices_by_fields("items", "index", {"itemname": "Station-01"})
+        Generic: return list of ids for rows in `table` that match non-None filters.
         """
         where_parts, params = [], []
         for col, val in filters.items():
@@ -83,7 +80,7 @@ class VerificationDB:
             raise ValueError("At least one filter must be provided.")
         where_sql = " AND ".join(where_parts)
         cur = self._execute(
-            f'SELECT "{index_col}" AS idx FROM "{table}" WHERE {where_sql};',
+            f'SELECT "{id_col}" AS idx FROM "{table}" WHERE {where_sql};',
             tuple(params),
         )
         return [int(r["idx"]) for r in cur.fetchall()]
@@ -93,175 +90,95 @@ class VerificationDB:
     # ====================================================
 
     def add_itemtype(self, typename: str) -> int:
-        """Insert a new item type. Returns new row PK (itemtypes.index)."""
+        """Insert a new item type. Returns new row PK (itemtypes.id)."""
         cur = self._execute('INSERT INTO "itemtypes" ("typename") VALUES (?);', (typename,))
         return cur.lastrowid
 
-    def update_itemtype(self, index: int, typename: Optional[str] = None) -> None:
+    def update_itemtype(self, id: int, typename: Optional[str] = None) -> None:
         """Update fields for itemtypes by primary key."""
         set_clause, params = self._update_set_clause({"typename": typename})
-        self._execute(f'UPDATE "itemtypes" SET {set_clause} WHERE "index" = ?;', params + (index,))
+        self._execute(f'UPDATE "itemtypes" SET {set_clause} WHERE "id" = ?;', params + (id,))
 
-    def delete_itemtype(self, index: int) -> None:
+    def delete_itemtype(self, id: int) -> None:
         """Delete an itemtype by primary key."""
-        self._execute('DELETE FROM "itemtypes" WHERE "index" = ?;', (index,))
+        self._execute('DELETE FROM "itemtypes" WHERE "id" = ?;', (id,))
 
-    # ---- Lookups (index by other fields)
-    def get_itemtype_index_by_typename(self, typename: str) -> Optional[int]:
-        """
-        Return the index for an itemtype by typename (None if not found).
-        """
-        ids = self._indices_by_fields("itemtypes", "index", {"typename": typename})
+    def get_itemtype_id_by_typename(self, typename: str) -> Optional[int]:
+        """Return the id for an itemtype by typename (None if not found)."""
+        ids = self._indices_by_fields("itemtypes", "id", {"typename": typename})
         return ids[0] if ids else None
 
     # ====================================================
     # items
     # ====================================================
 
-    def add_item(self, index: int, itemname: str, fkitemtype: int) -> int:
-        """
-        Insert into items. 'index' is UNIQUE (not PK). Returns provided index.
-        """
-        self._execute(
-            'INSERT INTO "items" ("index","itemname","fkitemtype") VALUES (?,?,?);',
-            (index, itemname, fkitemtype),
+    def add_item(self, itemname: str, fkitemtype: int) -> int:
+        """Insert into items. Returns auto-generated id."""
+        cur = self._execute(
+            'INSERT INTO "items" ("itemname","fkitemtype") VALUES (?,?);',
+            (itemname, fkitemtype),
         )
-        return index
+        return cur.lastrowid
 
     def update_item(
-        self,
-        index: int,
-        itemname: Optional[str] = None,
-        fkitemtype: Optional[int] = None,
+            self,
+            id: int,
+            itemname: Optional[str] = None,
+            fkitemtype: Optional[int] = None,
     ) -> None:
-        """Update items row identified by its UNIQUE 'index'."""
+        """Update items row identified by its id."""
         set_clause, params = self._update_set_clause(
             {"itemname": itemname, "fkitemtype": fkitemtype}
         )
-        self._execute(f'UPDATE "items" SET {set_clause} WHERE "index" = ?;', params + (index,))
+        self._execute(f'UPDATE "items" SET {set_clause} WHERE "id" = ?;', params + (id,))
 
-    def delete_item(self, index: int) -> None:
-        """Delete an item by its UNIQUE 'index'."""
-        self._execute('DELETE FROM "items" WHERE "index" = ?;', (index,))
+    def delete_item(self, id: int) -> None:
+        """Delete an item by its id."""
+        self._execute('DELETE FROM "items" WHERE "id" = ?;', (id,))
 
-    # Existing convenience lookups
-    def get_item_by_index(self, index: int) -> Optional[sqlite3.Row]:
-        cur = self._execute('SELECT * FROM "items" WHERE "index" = ?;', (index,))
+    def get_item_by_id(self, id: int) -> Optional[sqlite3.Row]:
+        cur = self._execute('SELECT * FROM "items" WHERE "id" = ?;', (id,))
         return cur.fetchone()
 
     def get_item_by_name(self, itemname: str) -> Optional[sqlite3.Row]:
         cur = self._execute('SELECT * FROM "items" WHERE "itemname" = ?;', (itemname,))
         return cur.fetchone()
 
-    # ---- New: index lookups by other fields
-    def get_item_index_by_name(self, itemname: str) -> Optional[int]:
-        """
-        Return items.index for a given itemname (None if not found).
-        """
-        ids = self._indices_by_fields("items", "index", {"itemname": itemname})
+    def get_item_id_by_name(self, itemname: str) -> Optional[int]:
+        """Return items.id for a given itemname (None if not found)."""
+        ids = self._indices_by_fields("items", "id", {"itemname": itemname})
         return ids[0] if ids else None
-
-    def get_item_index_by_fkitemtype(self, fkitemtype: int) -> Optional[int]:
-        """
-        Return items.index for a given fkitemtype.
-        NOTE: fkitemtype is UNIQUE in your schema, so this returns at most one.
-        """
-        ids = self._indices_by_fields("items", "index", {"fkitemtype": fkitemtype})
-        return ids[0] if ids else None
-
-    # ====================================================
-    # itemdates
-    # ====================================================
-
-    def add_itemdate(
-        self,
-        fkitem: int,
-        dailyrollupexists: int,
-        monthyear: str,
-        index: Optional[int] = None,
-    ) -> int:
-        """
-        Insert into itemdates. If 'index' is None, AUTOINCREMENT applies.
-        Returns row PK (itemdates.index).
-        """
-        if index is None:
-            cur = self._execute(
-                'INSERT INTO "itemdates" ("fkitem","dailyrollupexists","monthyear") VALUES (?,?,?);',
-                (fkitem, dailyrollupexists, monthyear),
-            )
-        else:
-            cur = self._execute(
-                'INSERT INTO "itemdates" ("index","fkitem","dailyrollupexists","monthyear") VALUES (?,?,?,?);',
-                (index, fkitem, dailyrollupexists, monthyear),
-            )
-        return cur.lastrowid
-
-    def update_itemdate(
-        self,
-        index: int,
-        fkitem: Optional[int] = None,
-        dailyrollupexists: Optional[int] = None,
-        monthyear: Optional[str] = None,
-    ) -> None:
-        """Update itemdates by primary key 'index'."""
-        set_clause, params = self._update_set_clause(
-            {"fkitem": fkitem, "dailyrollupexists": dailyrollupexists, "monthyear": monthyear}
-        )
-        self._execute(f'UPDATE "itemdates" SET {set_clause} WHERE "index" = ?;', params + (index,))
-
-    def delete_itemdate(self, index: int) -> None:
-        """Delete from itemdates by primary key 'index'."""
-        self._execute('DELETE FROM "itemdates" WHERE "index" = ?;', (index,))
-
-    # ---- Lookups (indices by other fields; may return multiple)
-    def find_itemdates_indices(
-        self,
-        fkitem: Optional[int] = None,
-        dailyrollupexists: Optional[int] = None,
-        monthyear: Optional[str] = None,
-    ) -> List[int]:
-        """
-        Return list of itemdates.index values matching provided filters.
-        At least one filter must be provided.
-        """
-        return self._indices_by_fields(
-            "itemdates",
-            "index",
-            {"fkitem": fkitem, "dailyrollupexists": dailyrollupexists, "monthyear": monthyear},
-        )
 
     # ====================================================
     # itemcharacteristics
     # ====================================================
 
-    def add_itemcharacteristic(
-        self,
-        index: int,
-        fkitem: int,
-        itemkey: str,
-        itemvalue: str,
-        itemkeyvaluetype: Optional[str] = None,
+    def add_characteristic(
+            self,
+            fkitem: int,
+            itemkey: str,
+            itemvalue: str,
+            itemkeyvaluetype: Optional[str] = None,
     ) -> int:
         """
-        Insert into itemcharacteristics. 'index' is PRIMARY KEY (no AUTOINCREMENT).
-        Returns the provided index.
+        Insert into itemcharacteristics. Returns auto-generated id.
         """
-        self._execute(
-            'INSERT INTO "itemcharacteristics" ("index","fkitem","itemkey","itemvalue","itemkeyvaluetype") '
-            'VALUES (?,?,?,?,?);',
-            (index, fkitem, itemkey, itemvalue, itemkeyvaluetype),
+        cur = self._execute(
+            'INSERT INTO "itemcharacteristics" ("fkitem","itemkey","itemvalue","itemkeyvaluetype") '
+            'VALUES (?,?,?,?);',
+            (fkitem, itemkey, itemvalue, itemkeyvaluetype),
         )
-        return index
+        return cur.lastrowid
 
     def update_itemcharacteristic(
-        self,
-        index: int,
-        fkitem: Optional[int] = None,
-        itemkey: Optional[str] = None,
-        itemvalue: Optional[str] = None,
-        itemkeyvaluetype: Optional[str] = None,
+            self,
+            id: int,
+            fkitem: Optional[int] = None,
+            itemkey: Optional[str] = None,
+            itemvalue: Optional[str] = None,
+            itemkeyvaluetype: Optional[str] = None,
     ) -> None:
-        """Update itemcharacteristics by primary key 'index'."""
+        """Update itemcharacteristics by primary key 'id'."""
         set_clause, params = self._update_set_clause(
             {
                 "fkitem": fkitem,
@@ -271,29 +188,25 @@ class VerificationDB:
             }
         )
         self._execute(
-            f'UPDATE "itemcharacteristics" SET {set_clause} WHERE "index" = ?;',
-            params + (index,),
+            f'UPDATE "itemcharacteristics" SET {set_clause} WHERE "id" = ?;',
+            params + (id,),
         )
 
-    def delete_itemcharacteristic(self, index: int) -> None:
-        """Delete from itemcharacteristics by primary key 'index'."""
-        self._execute('DELETE FROM "itemcharacteristics" WHERE "index" = ?;', (index,))
+    def delete_itemcharacteristic(self, id: int) -> None:
+        """Delete from itemcharacteristics by primary key 'id'."""
+        self._execute('DELETE FROM "itemcharacteristics" WHERE "id" = ?;', (id,))
 
-    # ---- Lookups (indices by other fields; may return multiple)
-    def find_itemcharacteristics_indices(
-        self,
-        fkitem: Optional[int] = None,
-        itemkey: Optional[str] = None,
-        itemvalue: Optional[str] = None,
-        itemkeyvaluetype: Optional[str] = None,
+    def find_itemcharacteristics_ids(
+            self,
+            fkitem: Optional[int] = None,
+            itemkey: Optional[str] = None,
+            itemvalue: Optional[str] = None,
+            itemkeyvaluetype: Optional[str] = None,
     ) -> List[int]:
-        """
-        Return list of itemcharacteristics.index values matching provided filters.
-        At least one filter must be provided.
-        """
+        """Return list of itemcharacteristics.id values matching provided filters."""
         return self._indices_by_fields(
             "itemcharacteristics",
-            "index",
+            "id",
             {
                 "fkitem": fkitem,
                 "itemkey": itemkey,
@@ -303,32 +216,121 @@ class VerificationDB:
         )
 
     # ====================================================
+    # itemloading
+    # ====================================================
+
+    def add_loading(
+            self,
+            fkitem: int,
+            dailyrollupexists: int,
+            monthyear: str,
+            percent: float,
+    ) -> int:
+        """Insert into itemloading. Returns auto-generated id."""
+        cur = self._execute(
+            'INSERT INTO "itemloading" ("fkitem","dailyrollupexists","monthyear","percent") '
+            'VALUES (?,?,?,?);',
+            (fkitem, dailyrollupexists, monthyear, percent),
+        )
+        return cur.lastrowid
+
+    def update_loading(
+            self,
+            id: int,
+            fkitem: Optional[int] = None,
+            dailyrollupexists: Optional[int] = None,
+            monthyear: Optional[str] = None,
+            percent: Optional[float] = None,
+    ) -> None:
+        """Update itemloading by primary key 'id'."""
+        set_clause, params = self._update_set_clause(
+            {
+                "fkitem": fkitem,
+                "dailyrollupexists": dailyrollupexists,
+                "monthyear": monthyear,
+                "percent": percent,
+            }
+        )
+        self._execute(f'UPDATE "itemloading" SET {set_clause} WHERE "id" = ?;', params + (id,))
+
+    def delete_loading(self, id: int) -> None:
+        """Delete from itemloading by primary key 'id'."""
+        self._execute('DELETE FROM "itemloading" WHERE "id" = ?;', (id,))
+
+    def upsert_loading(self, fkitem: int, monthyear: str, percent: float) -> None:
+        """
+        Insert or update loading percentage for a given item and month.
+        Uses dailyrollupexists=0 as default for new records.
+        """
+        cur = self._execute(
+            'SELECT "id" FROM "itemloading" WHERE "fkitem" = ? AND "monthyear" = ?;',
+            (fkitem, monthyear),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            self._execute(
+                'UPDATE "itemloading" SET "percent" = ? WHERE "id" = ?;',
+                (percent, existing["id"]),
+            )
+        else:
+            self.add_loading(fkitem, 0, monthyear, percent)
+
+    def get_loadings_for_items(self, item_ids: List[int]) -> Dict[Tuple[int, str], float]:
+        """
+        Return dict of (item_id, monthyear) -> percent for given items.
+        """
+        if not item_ids:
+            return {}
+
+        placeholders = ",".join("?" * len(item_ids))
+        cur = self._execute(
+            f'SELECT "fkitem", "monthyear", "percent" FROM "itemloading" '
+            f'WHERE "fkitem" IN ({placeholders});',
+            tuple(item_ids),
+        )
+
+        result = {}
+        for row in cur.fetchall():
+            key = (row["fkitem"], row["monthyear"])
+            result[key] = row["percent"]
+        return result
+
+    def find_loading_ids(
+            self,
+            fkitem: Optional[int] = None,
+            monthyear: Optional[str] = None,
+    ) -> List[int]:
+        """Return list of itemloading.id values matching provided filters."""
+        return self._indices_by_fields(
+            "itemloading",
+            "id",
+            {"fkitem": fkitem, "monthyear": monthyear},
+        )
+
+    # ====================================================
     # Listing helpers
     # ====================================================
 
     def list_items(self) -> Iterable[sqlite3.Row]:
-        return self._execute('SELECT * FROM "items" ORDER BY "index";').fetchall()
+        return self._execute('SELECT * FROM "items" ORDER BY "id";').fetchall()
 
     def list_itemtypes(self) -> Iterable[sqlite3.Row]:
-        return self._execute('SELECT * FROM "itemtypes" ORDER BY "index";').fetchall()
-
-    def list_itemdates_for_item(self, fkitem: int) -> Iterable[sqlite3.Row]:
-        return self._execute(
-            'SELECT * FROM "itemdates" WHERE "fkitem" = ? ORDER BY "index";', (fkitem,)
-        ).fetchall()
+        return self._execute('SELECT * FROM "itemtypes" ORDER BY "id";').fetchall()
 
     def list_characteristics_for_item(self, fkitem: int) -> Iterable[sqlite3.Row]:
         return self._execute(
-            'SELECT * FROM "itemcharacteristics" WHERE "fkitem" = ? ORDER BY "index";', (fkitem,)
+            'SELECT * FROM "itemcharacteristics" WHERE "fkitem" = ? ORDER BY "id";', (fkitem,)
         ).fetchall()
 
-    # ====================================================
-    # Convenience: resolve fkitem from itemname (since FK points to itemname in schema)
-    # ====================================================
+    def list_loadings_for_item(self, fkitem: int) -> Iterable[sqlite3.Row]:
+        return self._execute(
+            'SELECT * FROM "itemloading" WHERE "fkitem" = ? ORDER BY "monthyear";', (fkitem,)
+        ).fetchall()
 
-    def resolve_fkitem_from_name(self, itemname: str) -> Optional[int]:
-        """
-        Return items.index for a given itemname, or None if not found.
-        """
-        row = self.get_item_by_name(itemname)
-        return int(row["index"]) if row else None
+    def list_months(self) -> List[str]:
+        """Return sorted list of distinct monthyear values from itemloading."""
+        cur = self._execute(
+            'SELECT DISTINCT "monthyear" FROM "itemloading" ORDER BY "monthyear";'
+        )
+        return [row["monthyear"] for row in cur.fetchall()]

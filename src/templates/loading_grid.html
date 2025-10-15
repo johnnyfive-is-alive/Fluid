@@ -2,58 +2,56 @@
 {% block content %}
 <h2 class="mb-3">Loading Percent (by Item × Month)</h2>
 
-
 <form method="post" action="{{ url_for('loading.grid_edit') }}" class="mb-4">
-<div class="row g-2 align-items-end">
-<div class="col-md-8">
-<label class="form-label">Select items to edit</label>
-<select class="form-select" name="items" multiple size="6">
-{% for it in items %}
-<option value="{{ it['index'] }}" {% if it['index'] in selected_ids %}selected{% endif %}>
-[{{ it['index'] }}] {{ it['itemname'] }}
-</option>
-{% endfor %}
-</select>
-<div class="form-text">Hold Ctrl/Cmd to select multiple.</div>
-</div>
-<div class="col-md-4">
-<button class="btn btn-secondary w-100" type="submit">Edit Grid</button>
-</div>
-</div>
+    <div class="row g-2 align-items-end">
+        <div class="col-md-8">
+            <label class="form-label">Select items to edit</label>
+            <select class="form-select" name="items" multiple size="6">
+                {% for it in items %}
+                <option value="{{ it['id'] }}" {% if it['id'] in selected_ids %}selected{% endif %}>
+                    [{{ it['id'] }}] {{ it['itemname'] }}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="form-text">Hold Ctrl/Cmd to select multiple.</div>
+        </div>
+        <div class="col-md-4">
+            <button class="btn btn-secondary w-100" type="submit">Edit Grid</button>
+        </div>
+    </div>
 </form>
-
 
 {% if editing %}
 <form method="post" action="{{ url_for('loading.grid_save') }}">
-<div class="table-responsive">
-<table class="table table-sm table-bordered align-middle table-fixed">
-<thead class="table-light">
-<tr>
-<th>Item</th>
-{% for m in all_months %}
-<th class="text-center">{{ m }}</th>
-{% endfor %}
-</tr>
-</thead>
-<tbody>
-{% for it in items if it['index'] in selected_ids %}
-<tr>
-<th class="text-nowrap">[{{ it['index'] }}] {{ it['itemname'] }}</th>
-{% for m in all_months %}
-{% set key = (it['index'], m) %}
-{% set val = loadings.get(key) %}
-<td class="p-1">
-<input type="number" class="form-control form-control-sm text-end" step="0.1" min="0" max="100"
-name="percent-{{ it['index'] }}-{{ m }}" value="{{ '%.1f' % val if val is not none else '' }}"
-placeholder="%">
-</td>
-{% endfor %}
-</tr>
-{% endfor %}
-</tbody>
-</table>
-</div>
-<button class="btn btn-primary">Save Changes</button>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle table-fixed">
+            <thead class="table-light">
+                <tr>
+                    <th>Item</th>
+                    {% for m in all_months %}
+                    <th class="text-center">{{ m }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for it in items if it['id'] in selected_ids %}
+                <tr>
+                    <th class="text-nowrap">[{{ it['id'] }}] {{ it['itemname'] }}</th>
+                    {% for m in all_months %}
+                    {% set key = (it['id'], m) %}
+                    {% set val = loadings.get(key) %}
+                    <td class="p-1">
+                        <input type="number" class="form-control form-control-sm text-end" step="0.1" min="0" max="100"
+                            name="percent-{{ it['id'] }}-{{ m }}" value="{{ '%.1f' % val if val is not none else '' }}"
+                            placeholder="%">
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <button class="btn btn-primary">Save Changes</button>
 </form>
 {% endif %}
 {% endblock %}

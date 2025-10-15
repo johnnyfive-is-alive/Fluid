@@ -1,30 +1,47 @@
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash
-
+from flask import Blueprint, g, render_template, request, redirect, url_for, flash
 
 bp = Blueprint('characteristics', __name__)
 
 
+def get_db():
+    """Get database connection for current request."""
+    from app import get_db as app_get_db
+    return app_get_db()
+
+
 @bp.get('/')
 def form():
-db = current_app.config['DB']
-items = db.list_items()
-return render_template('characteristics_form.html', items=items)
+    """Show the characteristics form."""
+    db = get_db()
+    items = db.list_items()
+    return render_template('characteristics_form.html', items=items)
 
 
 @bp.post('/add')
 def add():
-db = current_app.config['DB']
-fkitem = int(request.form['fkitem'])
-itemkey = request.form['itemkey'].strip()
-itemvalue = request.form['itemvalue'].strip()
-itemkeyvaluetype = request.form.get('itemkeyvaluetype', '').strip() or None
+    """Add a new characteristic to an item."""
+    db = get_db()
 
+    try:
+        fkitem = int(request.form['fkitem'])
+        itemkey = request.form['itemkey'].strip()
+        itemvalue = request.form['itemvalue'].strip()
+        itemkeyvaluetype = request.form.get('itemkeyvaluetype', '').strip() or None
 
-if not itemkey:
-flash('Item key is required.', 'danger')
-return redirect(url_for('characteristics.form'))
+        if not itemkey:
+            flash('Item key is required.', 'warning')
+            return redirect(url_for('characteristics.form'))
 
+        # Add the characteristic
+        db.add_characteristic(fkitem, itemkey, itemvalue, itemkeyvaluetype)
+        db.con.commit()
 
-db.add_characteristic(fkitem, itemkey, itemvalue, itemkeyvaluetype)
-flash('Characteristic added.', 'success')
-return redirect(url_for('characteristics.form'))
+        flash('Characteristic added successfully.', 'success')
+
+    except ValueError as e:
+        flash(f'Invalid input: {e}', 'danger')
+    except Exception as e:
+        db.con.rollback()
+        flash(f'Error adding characteristic: {e}', 'danger')
+
+    return redirect(url_for('characteristics.form'))
