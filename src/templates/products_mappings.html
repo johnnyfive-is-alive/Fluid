@@ -8,7 +8,7 @@
         <div class="card text-center">
             <div class="card-body">
                 <h3 class="display-4">{{ mapped_items|length }}</h3>
-                <p class="text-muted mb-0">Mapped Items</p>
+                <p class="text-muted mb-0">Items Using Product</p>
             </div>
         </div>
     </div>
@@ -33,7 +33,7 @@
 <!-- Mapped Items Table -->
 <div class="card mb-4">
     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Items Mapped to This Product</h5>
+        <h5 class="mb-0">Items Using This Product</h5>
         <a href="{{ url_for('products.map_form', product_id=product['id']) }}" class="btn btn-light btn-sm">
             <i class="bi bi-pencil"></i> Edit Mappings
         </a>
@@ -46,6 +46,8 @@
                     <tr>
                         <th>ID</th>
                         <th>Item Name</th>
+                        <th>Type</th>
+                        <th>Loading Records</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -54,6 +56,8 @@
                     <tr>
                         <td>{{ item['id'] }}</td>
                         <td><strong>{{ item['itemname'] }}</strong></td>
+                        <td><span class="badge bg-info">{{ item['typename'] }}</span></td>
+                        <td><span class="badge bg-success">{{ item['loading_count'] }}</span></td>
                         <td>
                             <a href="{{ url_for('items.edit_form', id=item['id']) }}" class="btn btn-sm btn-outline-primary">
                                 View Item
@@ -67,43 +71,71 @@
         {% else %}
         <div class="alert alert-warning mb-0">
             <i class="bi bi-exclamation-triangle"></i>
-            No items are currently mapped to this product. 
-            <a href="{{ url_for('products.map_form', product_id=product['id']) }}" class="alert-link">
-                Click here to add mappings
-            </a>.
+            No items have loading records for this product yet.
+            Use the <a href="{{ url_for('loading.grid_selector') }}" class="alert-link">Loading Grid</a>
+            to allocate capacity, or <a href="{{ url_for('products.map_form', product_id=product['id']) }}" class="alert-link">
+            explicitly map items</a> to this product.
         </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Loading Statistics -->
+<!-- Loading Statistics with Chart -->
 <div class="card">
     <div class="card-header bg-info text-white">
-        <h5 class="mb-0">Loading Allocation Statistics</h5>
+        <h5 class="mb-0">Loading Allocation Over Time</h5>
     </div>
     <div class="card-body">
         {% if loading_stats['total_records'] > 0 %}
-        <div class="row">
-            <div class="col-md-6">
+
+        <!-- Summary Stats -->
+        <div class="row mb-4">
+            <div class="col-md-4">
                 <h6>Total Records:</h6>
-                <p class="lead">{{ loading_stats['total_records'] }} loading entries</p>
+                <p class="lead mb-0">{{ loading_stats['total_records'] }} loading entries</p>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <h6>Cumulative Allocation:</h6>
-                <p class="lead">{{ '%.1f' % loading_stats['total_percent'] }}% total across all records</p>
+                <p class="lead mb-0">{{ '%.1f' % loading_stats['total_percent'] }}%</p>
+            </div>
+            <div class="col-md-4">
+                <h6>Months with Data:</h6>
+                <p class="lead mb-0">{{ loading_stats['month_count'] }} month(s)</p>
             </div>
         </div>
-        <hr>
-        <p class="mb-0">
-            <i class="bi bi-calendar-range"></i>
-            This product has loading data spanning <strong>{{ loading_stats['month_count'] }}</strong> 
-            different month(s).
-        </p>
+
+        <!-- Chart Canvas -->
+        <div class="mb-3">
+            <canvas id="loadingChart" style="max-height: 400px;"></canvas>
+        </div>
+
+        <!-- Detailed Table -->
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Month</th>
+                        <th>Item</th>
+                        <th class="text-end">Allocation %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in loading_details %}
+                    <tr>
+                        <td><strong>{{ record['monthyear'] }}</strong></td>
+                        <td>{{ record['itemname'] }}</td>
+                        <td class="text-end">{{ '%.1f' % record['percent'] }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
         {% else %}
         <div class="alert alert-info mb-0">
             <i class="bi bi-info-circle"></i>
-            No loading allocations have been made for this product yet. 
-            Use the <a href="{{ url_for('loading.grid_selector') }}" class="alert-link">Loading Grid</a> 
+            No loading allocations have been made for this product yet.
+            Use the <a href="{{ url_for('loading.grid_selector') }}" class="alert-link">Loading Grid</a>
             to assign capacity.
         </div>
         {% endif %}
@@ -119,4 +151,103 @@
         <i class="bi bi-grid-3x3"></i> Go to Loading Grid
     </a>
 </div>
+
+{% if loading_stats['total_records'] > 0 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Prepare chart data from loading details
+    const loadingDetails = {{ loading_details|tojson }};
+
+    // Group by month and aggregate by item
+    const monthlyData = {};
+    const items = new Set();
+
+    loadingDetails.forEach(record => {
+        if (!monthlyData[record.monthyear]) {
+            monthlyData[record.monthyear] = {};
+        }
+        monthlyData[record.monthyear][record.itemname] = record.percent;
+        items.add(record.itemname);
+    });
+
+    const months = Object.keys(monthlyData).sort();
+    const itemArray = Array.from(items).sort();
+
+    // Create datasets for each item
+    const colors = [
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(255, 206, 86, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 159, 64, 0.8)'
+    ];
+
+    const datasets = itemArray.map((item, idx) => {
+        return {
+            label: item,
+            data: months.map(month => monthlyData[month][item] || 0),
+            backgroundColor: colors[idx % colors.length],
+            borderColor: colors[idx % colors.length].replace('0.8', '1'),
+            borderWidth: 2
+        };
+    });
+
+    // Create the chart
+    const ctx = document.getElementById('loadingChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Loading Allocation by Item and Month (%)',
+                    font: { size: 16 }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: false,
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                },
+                y: {
+                    stacked: false,
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Allocation %'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

@@ -204,8 +204,8 @@ def delete_product(id):
 @bp.get('/mappings/<int:id>')
 def view_mappings(id):
     """
-    View which items are mapped to this product.
-    Shows the item-product relationships.
+    View which items are using this product (either through explicit mappings or loading records).
+    Shows the item-product relationships and detailed loading statistics.
     """
     db = get_db()
 
@@ -215,25 +215,57 @@ def view_mappings(id):
         flash('Product not found.', 'danger')
         return redirect(url_for('products.list_products'))
 
-    # Get mapped items
-    mapped_items = db.get_items_for_product(id)
+    # Get items that have loading records for this product (actual usage)
+    items_with_loading_query = '''
+        SELECT DISTINCT 
+            i.id, 
+            i.itemname,
+            it.typename,
+            COUNT(DISTINCT il.id) as loading_count
+        FROM items i
+        JOIN itemtypes it ON i.fkitemtype = it.id
+        JOIN itemloading il ON i.id = il.fkitem
+        WHERE il.fkproduct = ? OR (il.fkproduct IS NULL AND ? IS NULL)
+        GROUP BY i.id, i.itemname, it.typename
+        ORDER BY i.itemname
+    '''
+    # Handle UNALLOCATED (NULL) vs explicit product IDs
+    product_id_param = id if product['itemname'] != 'UNALLOCATED' else None
+    mapped_items = db._execute(items_with_loading_query, (product_id_param, product_id_param)).fetchall()
 
-    # Get loading statistics
+    # Get loading statistics with monthly breakdown
     loading_query = '''
         SELECT 
             COUNT(*) as total_records,
             SUM(percent) as total_percent,
             COUNT(DISTINCT monthyear) as month_count
         FROM itemloading
-        WHERE fkproduct = ?
+        WHERE fkproduct = ? OR (fkproduct IS NULL AND ? IS NULL)
     '''
-    loading_stats = db._execute(loading_query, (id,)).fetchone()
+    loading_stats = db._execute(loading_query, (product_id_param, product_id_param)).fetchone()
+
+    # Get detailed loading records for chart and table
+    loading_details_query = '''
+        SELECT 
+            il.monthyear,
+            i.itemname,
+            il.percent
+        FROM itemloading il
+        JOIN items i ON il.fkitem = i.id
+        WHERE il.fkproduct = ? OR (il.fkproduct IS NULL AND ? IS NULL)
+        ORDER BY il.monthyear, i.itemname
+    '''
+    loading_details_rows = db._execute(loading_details_query, (product_id_param, product_id_param)).fetchall()
+
+    # Convert Row objects to dictionaries for JSON serialization
+    loading_details = [dict(row) for row in loading_details_rows]
 
     return render_template(
         'products_mappings.html',
         product=product,
         mapped_items=mapped_items,
-        loading_stats=loading_stats
+        loading_stats=loading_stats,
+        loading_details=loading_details
     )
 
 
