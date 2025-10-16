@@ -6,9 +6,9 @@
 <form method="post" action="{{ url_for('loading.grid_edit') }}" class="mb-4">
     <div class="card">
         <div class="card-body">
-            <h5 class="card-title">Step 1: Select Items</h5>
+            <h5 class="card-title">Step 1: Select Items and Date Range</h5>
             <div class="row g-3">
-                <div class="col-md-10">
+                <div class="col-md-6">
                     <label class="form-label">Select items to edit</label>
                     <select class="form-select" name="items" multiple size="8">
                         {% for it in items %}
@@ -19,8 +19,22 @@
                     </select>
                     <div class="form-text">Hold Ctrl/Cmd to select multiple items.</div>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" type="submit">
+                <div class="col-md-3">
+                    <label class="form-label">Start Month</label>
+                    <input type="month" class="form-control" name="start_month"
+                           value="{{ start_month or '' }}" required>
+                    <div class="form-text">First month to display</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">End Month</label>
+                    <input type="month" class="form-control" name="end_month"
+                           value="{{ end_month or '' }}" required>
+                    <div class="form-text">Last month to display</div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button class="btn btn-primary" type="submit">
                         <i class="bi bi-grid"></i> Load Grid
                     </button>
                 </div>
@@ -86,7 +100,7 @@
                                 <td class="text-center">
                                     <small>{{ m }}</small>
                                 </td>
-                                
+
                                 {% for product in products %}
                                 {% set key = (it['id'], m, product['id']) %}
                                 {% set val = loadings.get(key) %}
@@ -131,7 +145,7 @@
     <div class="card-body">
         <h5 class="card-title">📋 How to Use This Grid</h5>
         <ol class="mb-0">
-            <li><strong>Select items</strong> from the dropdown above and click "Load Grid"</li>
+            <li><strong>Select items and date range</strong> from the form above and click "Load Grid"</li>
             <li><strong>Enter percentages</strong> for each product allocation per month</li>
             <li><strong>INACTIVE column</strong> represents unallocated/idle capacity</li>
             <li><strong>Row totals</strong> show the sum for each item-month (should equal 100%)</li>
@@ -156,16 +170,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const itemId = row.dataset.item;
             const month = row.dataset.month;
             const totalEl = document.getElementById('total-' + itemId + '-' + month);
-            
+
             let total = 0;
             inputs.forEach(input => {
                 const value = parseFloat(input.value) || 0;
                 total += value;
             });
-            
+
             // Update display
             totalEl.textContent = total.toFixed(1) + '%';
-            
+
             // Color code based on validity
             if (total > 100) {
                 totalEl.className = 'row-total text-danger fw-bold';
@@ -183,25 +197,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Add event listeners to all inputs
     const inputs = document.querySelectorAll('.loading-input');
     inputs.forEach(input => {
         input.addEventListener('input', calculateRowTotals);
         input.addEventListener('change', calculateRowTotals);
     });
-    
+
     // Calculate on page load
     calculateRowTotals();
 });
 </script>
 
 <style>
-.table-fixed th, .table-fixed td { 
-    white-space: nowrap; 
+.table-fixed th, .table-fixed td {
+    white-space: nowrap;
 }
-.table-fixed { 
-    font-variant-numeric: tabular-nums; 
+.table-fixed {
+    font-variant-numeric: tabular-nums;
 }
 .sticky-top {
     position: sticky;
@@ -223,10 +237,11 @@ document.addEventListener('DOMContentLoaded', function() {
 {% if not editing %}
 <div class="alert alert-info">
     <h5 class="alert-heading">👆 Get Started</h5>
-    <p>Select one or more items from the list above and click "Load Grid" to begin editing loading allocations by product.</p>
+    <p>Select one or more items from the list above, choose your date range, and click "Load Grid" to begin editing loading allocations by product.</p>
     <hr>
     <p class="mb-0">
         <strong>Tip:</strong> Use Ctrl+Click (Windows) or Cmd+Click (Mac) to select multiple items at once.
+        You can select any date range to view or create loading data for future months.
     </p>
 </div>
 {% endif %}

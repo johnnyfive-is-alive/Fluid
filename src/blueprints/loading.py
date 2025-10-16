@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
+from datetime import datetime
 
 bp = Blueprint('loading', __name__)
 
@@ -26,20 +27,25 @@ def grid_selector():
     '''
     items = db._execute(items_query).fetchall()
 
-    # Get all months
-    all_months = db.list_months()
-
     # Get all products (including UNALLOCATED)
     products = db.list_products()
+
+    # Set default date range (current year)
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+    start_month = f"{current_year}-{current_month:02d}"
+    end_month = f"{current_year}-12"
 
     return render_template(
         'loading_grid_products.html',
         items=items,
-        all_months=all_months,
         products=products,
         selected_ids=[],
         editing=False,
-        loadings={}
+        loadings={},
+        all_months=[],
+        start_month=start_month,
+        end_month=end_month
     )
 
 
@@ -71,12 +77,22 @@ def grid_edit():
         flash('Please select at least one item.', 'warning')
         return redirect(url_for('loading.grid_selector'))
 
-    # Get all months
-    all_months = db.list_months()
-    if not all_months:
-        from datetime import datetime
+    # Get date range from form (format: YYYY-MM)
+    start_month = request.form.get('start_month', '')
+    end_month = request.form.get('end_month', '')
+
+    # Validate and generate month list
+    if start_month and end_month:
+        all_months = db.generate_month_range(start_month, end_month)
+        if not all_months:
+            flash('Invalid date range.', 'danger')
+            return redirect(url_for('loading.grid_selector'))
+    else:
+        # Default: current year
         current_year = datetime.now().year
         all_months = [f"{current_year}-{m:02d}" for m in range(1, 13)]
+        start_month = all_months[0]
+        end_month = all_months[-1]
 
     # Get all products
     products = db.list_products()
@@ -87,7 +103,6 @@ def grid_edit():
         products = list(db.list_products())
 
     # Get existing loading data for selected items
-    # Returns dict with (item_id, monthyear, product_id) -> percent
     loadings = db.get_loadings_for_items(selected_ids)
 
     return render_template(
@@ -98,7 +113,9 @@ def grid_edit():
         selected_ids=selected_ids,
         editing=True,
         loadings=loadings,
-        unallocated_id=unallocated_id
+        unallocated_id=unallocated_id,
+        start_month=start_month,
+        end_month=end_month
     )
 
 

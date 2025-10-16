@@ -414,6 +414,23 @@ class VerificationDB:
         )
         return [row["monthyear"] for row in cur.fetchall()]
 
+    def generate_month_range(self, start_month: str, end_month: str) -> List[str]:
+        """Generate list of months between start_month and end_month (YYYY-MM format)."""
+        from datetime import datetime
+        from dateutil import rrule
+
+        try:
+            start_date = datetime.strptime(start_month, '%Y-%m')
+            end_date = datetime.strptime(end_month, '%Y-%m')
+
+            months = []
+            for dt in rrule.rrule(rrule.MONTHLY, dtstart=start_date, until=end_date):
+                months.append(dt.strftime('%Y-%m'))
+
+            return months
+        except ValueError:
+            return []
+
     # ====================================================
     # Convenience helpers
     # ====================================================
