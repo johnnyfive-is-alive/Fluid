@@ -120,12 +120,26 @@ def grid_save():
             continue
 
         try:
-            # Split the field name: percent-{item_id}-{monthyear}-{product_id}
-            parts = key.split('-', 3)
-            if len(parts) != 4:
+            # Remove the "percent-" prefix first
+            key_without_prefix = key[8:]  # Remove "percent-"
+
+            # Find the last hyphen to separate product_id
+            last_hyphen_idx = key_without_prefix.rfind('-')
+            if last_hyphen_idx == -1:
                 continue
 
-            _, item_id_str, monthyear, product_id_str = parts
+            product_id_str = key_without_prefix[last_hyphen_idx + 1:]
+            remainder = key_without_prefix[:last_hyphen_idx]
+
+            # Find the first hyphen to separate item_id from monthyear
+            first_hyphen_idx = remainder.find('-')
+            if first_hyphen_idx == -1:
+                continue
+
+            item_id_str = remainder[:first_hyphen_idx]
+            monthyear = remainder[first_hyphen_idx + 1:]
+
+            # Parse IDs
             item_id = int(item_id_str)
             product_id = int(product_id_str) if product_id_str != 'None' else None
 
