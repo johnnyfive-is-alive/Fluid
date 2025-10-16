@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Loading Allocation by Product</h2>
+
+<!-- Item Selection Form -->
+<form method="post" action="{{ url_for('loading.grid_edit') }}" class="mb-4">
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Step 1: Select Items</h5>
+            <div class="row g-3">
+                <div class="col-md-10">
+                    <label class="form-label">Select items to edit</label>
+                    <select class="form-select" name="items" multiple size="8">
+                        {% for it in items %}
+                        <option value="{{ it['id'] }}" {% if it['id'] in selected_ids %}selected{% endif %}>
+                            [{{ it['typename'] }}] {{ it['itemname'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Hold Ctrl/Cmd to select multiple items.</div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" type="submit">
+                        <i class="bi bi-grid"></i> Load Grid
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Product Legend -->
+{% if editing and products %}
+<div class="card mb-3">
+    <div class="card-body">
+        <h6 class="card-title">Products in System:</h6>
+        <div class="row">
+            {% for product in products %}
+            <div class="col-md-3">
+                <span class="badge {% if product['itemname'] == 'UNALLOCATED' %}bg-secondary{% else %}bg-info{% endif %} me-1">
+                    {{ product['itemname'] }}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Loading Grid (Product-Based) -->
+{% if editing %}
+<form method="post" action="{{ url_for('loading.grid_save') }}">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Step 2: Edit Loading Allocations</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle table-hover mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-dark sticky-top">
+                        <tr>
+                            <th class="text-center" style="min-width: 150px;">Item</th>
+                            <th class="text-center" style="min-width: 100px;">Month</th>
+                            {% for product in products %}
+                            <th class="text-center" style="min-width: 80px;">
+                                {% if product['itemname'] == 'UNALLOCATED' %}
+                                <span class="badge bg-secondary">INACTIVE</span>
+                                {% else %}
+                                {{ product['itemname'] }}
+                                {% endif %}
+                            </th>
+                            {% endfor %}
+                            <th class="text-center bg-light" style="min-width: 60px;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for it in items if it['id'] in selected_ids %}
+                            {% for m in all_months %}
+                            <tr class="item-month-row" data-item="{{ it['id'] }}" data-month="{{ m }}">
+                                {% if loop.first %}
+                                <th rowspan="{{ all_months|length }}" class="text-nowrap align-middle bg-light">
+                                    <span class="badge bg-info">{{ it['typename'] }}</span><br>
+                                    <strong>{{ it['itemname'] }}</strong>
+                                </th>
+                                {% endif %}
+                                <td class="text-center">
+                                    <small>{{ m }}</small>
+                                </td>
+                                
+                                {% for product in products %}
+                                {% set key = (it['id'], m, product['id']) %}
+                                {% set val = loadings.get(key) %}
+                                <td class="p-1">
+                                    <input type="number" class="form-control form-control-sm text-end loading-input" step="0.1" min="0" max="100" name="percent-{{ it['id'] }}-{{ m }}-{{ product['id'] }}" value="{{ '%.1f' % val if val is not none else '' }}" placeholder="%" data-item="{{ it['id'] }}" data-month="{{ m }}">
+                                </td>
+                                {% endfor %}
+
+                                <!-- Row total column -->
+                                <td class="text-center bg-light align-middle">
+                                    <strong class="row-total" id="total-{{ it['id'] }}-{{ m }}">0%</strong>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-save"></i> Save All Changes
+                    </button>
+                    <a href="{{ url_for('loading.grid_selector') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+                <div class="text-muted">
+                    <small>
+                        <i class="bi bi-info-circle"></i>
+                        Each row should sum to ≤100%.
+                        <strong>INACTIVE</strong> = Unallocated capacity.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Instructions Card -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">📋 How to Use This Grid</h5>
+        <ol class="mb-0">
+            <li><strong>Select items</strong> from the dropdown above and click "Load Grid"</li>
+            <li><strong>Enter percentages</strong> for each product allocation per month</li>
+            <li><strong>INACTIVE column</strong> represents unallocated/idle capacity</li>
+            <li><strong>Row totals</strong> show the sum for each item-month (should equal 100%)</li>
+            <li><strong>Click Save</strong> to persist your changes to the database</li>
+        </ol>
+        <div class="alert alert-info mt-3 mb-0">
+            <strong>Example:</strong> If DV-SPYKER is 50% allocated to BEEHIVE and 50% to GENERIC in September 2025,
+            enter 50 in each column for that month. Any remaining capacity goes in INACTIVE.
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for row total calculation -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Calculate row totals when page loads or inputs change
+    function calculateRowTotals() {
+        const rows = document.querySelectorAll('.item-month-row');
+
+        rows.forEach(row => {
+            const inputs = row.querySelectorAll('.loading-input');
+            const itemId = row.dataset.item;
+            const month = row.dataset.month;
+            const totalEl = document.getElementById('total-' + itemId + '-' + month);
+            
+            let total = 0;
+            inputs.forEach(input => {
+                const value = parseFloat(input.value) || 0;
+                total += value;
+            });
+            
+            // Update display
+            totalEl.textContent = total.toFixed(1) + '%';
+            
+            // Color code based on validity
+            if (total > 100) {
+                totalEl.className = 'row-total text-danger fw-bold';
+                row.classList.add('table-danger');
+            } else if (total === 100) {
+                totalEl.className = 'row-total text-success fw-bold';
+                row.classList.remove('table-danger', 'table-warning');
+            } else if (total > 0) {
+                totalEl.className = 'row-total text-warning fw-bold';
+                row.classList.remove('table-danger');
+                row.classList.add('table-warning');
+            } else {
+                totalEl.className = 'row-total';
+                row.classList.remove('table-danger', 'table-warning');
+            }
+        });
+    }
+    
+    // Add event listeners to all inputs
+    const inputs = document.querySelectorAll('.loading-input');
+    inputs.forEach(input => {
+        input.addEventListener('input', calculateRowTotals);
+        input.addEventListener('change', calculateRowTotals);
+    });
+    
+    // Calculate on page load
+    calculateRowTotals();
+});
+</script>
+
+<style>
+.table-fixed th, .table-fixed td { 
+    white-space: nowrap; 
+}
+.table-fixed { 
+    font-variant-numeric: tabular-nums; 
+}
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.loading-input {
+    width: 70px;
+}
+.loading-input:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+</style>
+
+{% endif %}
+
+<!-- Empty State -->
+{% if not editing %}
+<div class="alert alert-info">
+    <h5 class="alert-heading">👆 Get Started</h5>
+    <p>Select one or more items from the list above and click "Load Grid" to begin editing loading allocations by product.</p>
+    <hr>
+    <p class="mb-0">
+        <strong>Tip:</strong> Use Ctrl+Click (Windows) or Cmd+Click (Mac) to select multiple items at once.
+    </p>
+</div>
+{% endif %}
+
+{% endblock %}

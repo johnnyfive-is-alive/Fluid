@@ -8,9 +8,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Path to your existing SQLite file (relative to app.py)
 DB_PATH = os.path.join(BASE_DIR, 'db', 'fluid.db')
 
-# Ensure the extra table exists on startup
-EXTRA_SCHEMA_PATH = os.path.join(BASE_DIR, 'schema_extras.sql')
-
 
 def get_db() -> VerificationDB:
     """
@@ -36,18 +33,28 @@ def create_app() -> Flask:
     # Store database path in config
     app.config['DB_PATH'] = DB_PATH
 
-    # Initialize DB & apply extra schema at startup (one-time setup)
+    # Initialize DB at startup (ensure schema compatibility)
     with app.app_context():
         db = VerificationDB(DB_PATH)
         db.connect()
 
-        # Apply extra schema if file exists
-        if os.path.exists(EXTRA_SCHEMA_PATH):
-            with open(EXTRA_SCHEMA_PATH, 'r', encoding='utf-8') as f:
-                db.con.executescript(f.read())
-            db.con.commit()
+        # Ensure PRODUCT type and UNALLOCATED product exist
+        try:
+            product_type_id = db.get_itemtype_id_by_typename('PRODUCT')
+            if not product_type_id:
+                product_type_id = db.add_itemtype('PRODUCT')
+                db.con.commit()
+                print("Created PRODUCT item type")
 
-        db.close()
+            unallocated = db.get_item_by_name('UNALLOCATED')
+            if not unallocated:
+                unallocated_id = db.add_item('UNALLOCATED', product_type_id)
+                db.con.commit()
+                print(f"Created UNALLOCATED product with ID {unallocated_id}")
+        except Exception as e:
+            print(f"Startup initialization warning: {e}")
+        finally:
+            db.close()
 
     # Make get_db function accessible
     app.config['GET_DB'] = get_db
@@ -67,11 +74,13 @@ def create_app() -> Flask:
     from blueprints.loading import bp as loading_bp
     from blueprints.items import bp as items_bp
     from blueprints.itemtypes import bp as itemtypes_bp
+    from blueprints.products import bp as products_bp
 
     app.register_blueprint(characteristics_bp, url_prefix='/characteristics')
     app.register_blueprint(loading_bp, url_prefix='/loading')
     app.register_blueprint(items_bp, url_prefix='/items')
     app.register_blueprint(itemtypes_bp, url_prefix='/itemtypes')
+    app.register_blueprint(products_bp, url_prefix='/products')
 
     @app.get('/')
     def home():

@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block content %}
+<!-- Header with add button -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Products</h2>
+    <a href="{{ url_for('products.add_form') }}" class="btn btn-primary">
+        <i class="bi bi-plus"></i> Add New Product
+    </a>
+</div>
+
+<!-- Products table -->
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Product Name</th>
+                <th>Mapped Items</th>
+                <th>Loading Records</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if products %}
+                {% for product in products %}
+                <tr {% if product['itemname'] == 'UNALLOCATED' %}class="table-secondary"{% endif %}>
+                    <td>{{ product['id'] }}</td>
+                    <td>
+                        <strong>{{ product['itemname'] }}</strong>
+                        {% if product['itemname'] == 'UNALLOCATED' %}
+                        <span class="badge bg-secondary ms-2">System</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-info">{{ product['mapped_items'] }}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-success">{{ product['loading_count'] }}</span>
+                    </td>
+                    <td>
+                        <!-- View mappings -->
+                        <a href="{{ url_for('products.view_mappings', id=product['id']) }}" 
+                           class="btn btn-sm btn-outline-info">
+                            View Usage
+                        </a>
+                        
+                        <!-- Map items -->
+                        <a href="{{ url_for('products.map_form', product_id=product['id']) }}" 
+                           class="btn btn-sm btn-outline-secondary">
+                            Map Items
+                        </a>
+                        
+                        <!-- Edit button -->
+                        <a href="{{ url_for('products.edit_form', id=product['id']) }}" 
+                           class="btn btn-sm btn-outline-primary">
+                            Edit
+                        </a>
+                        
+                        <!-- Delete button (disabled for UNALLOCATED) -->
+                        {% if product['itemname'] != 'UNALLOCATED' %}
+                        <form method="post" 
+                              action="{{ url_for('products.delete_product', id=product['id']) }}" 
+                              style="display:inline;"
+                              onsubmit="return confirm('Delete product \'{{ product['itemname'] }}\'? This will fail if mappings or loading records exist.');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                        {% else %}
+                        <button class="btn btn-sm btn-outline-danger" disabled title="System product cannot be deleted">
+                            Delete
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">
+                        No products found. Add one to start tracking product-based loading!
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Info card -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">About Products</h5>
+        <p class="card-text">
+            Products represent what your items (stations, resources, units) are working on. 
+            Loading percentages can be allocated across different products per month.
+        </p>
+        <p class="card-text mb-0">
+            <strong>UNALLOCATED</strong> is a special system product that represents idle/inactive capacity.
+            It cannot be deleted.
+        </p>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ products|length }}</h3>
+                <p class="text-muted mb-0">Total Products</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ products|sum(attribute='mapped_items') }}</h3>
+                <p class="text-muted mb-0">Total Mappings</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ products|sum(attribute='loading_count') }}</h3>
+                <p class="text-muted mb-0">Loading Records</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

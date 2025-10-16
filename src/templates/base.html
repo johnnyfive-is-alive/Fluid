@@ -5,13 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Verification DB</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <link href="{{ url_for('static', filename='app.css') }}" rel="stylesheet">
 </head>
 <body>
 <!-- Navigation bar with dropdown menus for better organization -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
 <div class="container-fluid">
-<a class="navbar-brand" href="/">Verification DB</a>
+<a class="navbar-brand" href="/">
+    <i class="bi bi-database"></i> Verification DB
+</a>
 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
 <span class="navbar-toggler-icon"></span>
 </button>
@@ -20,43 +23,59 @@
 <!-- Item Types dropdown -->
 <li class="nav-item dropdown">
 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-Item Types
+    <i class="bi bi-tag"></i> Item Types
 </a>
 <ul class="dropdown-menu">
 <li><a class="dropdown-item" href="{{ url_for('itemtypes.list_types') }}">View All</a></li>
 <li><a class="dropdown-item" href="{{ url_for('itemtypes.add_form') }}">Add New</a></li>
 </ul>
 </li>
+
 <!-- Items dropdown -->
 <li class="nav-item dropdown">
 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-Items
+    <i class="bi bi-box"></i> Items
 </a>
 <ul class="dropdown-menu">
 <li><a class="dropdown-item" href="{{ url_for('items.list_items') }}">View All</a></li>
 <li><a class="dropdown-item" href="{{ url_for('items.add_form') }}">Add New</a></li>
 </ul>
 </li>
+
+<!-- Products dropdown -->
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+    <i class="bi bi-basket"></i> Products
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item" href="{{ url_for('products.list_products') }}">View All</a></li>
+<li><a class="dropdown-item" href="{{ url_for('products.add_form') }}">Add New</a></li>
+</ul>
+</li>
+
 <!-- Characteristics dropdown -->
 <li class="nav-item dropdown">
 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-Characteristics
+    <i class="bi bi-tags"></i> Characteristics
 </a>
 <ul class="dropdown-menu">
 <li><a class="dropdown-item" href="{{ url_for('characteristics.list_characteristics') }}">View All</a></li>
 <li><a class="dropdown-item" href="{{ url_for('characteristics.add_form') }}">Add New</a></li>
 </ul>
 </li>
-<!-- Loading Grid - single link -->
+
+<!-- Loading Grid - single link with icon -->
 <li class="nav-item">
-<a class="nav-link" href="{{ url_for('loading.grid_selector') }}">Loading Grid</a>
+<a class="nav-link" href="{{ url_for('loading.grid_selector') }}">
+    <i class="bi bi-grid-3x3"></i> Loading Grid
+</a>
 </li>
 </ul>
 </div>
 </div>
 </nav>
 
-<div class="container">
+<div class="container-fluid px-4">
 <!-- Flash messages for user feedback -->
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}

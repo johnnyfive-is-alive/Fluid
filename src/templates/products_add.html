@@ -1,10 +1,48 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Add New Product</h2>
 
-</body>
-</html>
+<!-- Add form -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('products.add_product') }}">
+            <div class="mb-3">
+                <label for="productname" class="form-label">Product Name</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="productname" 
+                       name="productname" 
+                       placeholder="e.g., BEEHIVE 300G, GENERIC 300L, R64-72" 
+                       required
+                       pattern="[A-Z0-9 _-]+"
+                       title="Use uppercase letters, numbers, spaces, hyphens, and underscores">
+                <div class="form-text">
+                    Use UPPERCASE letters (will be auto-converted). Names must be unique.
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <button type="submit" class="btn btn-primary">Add Product</button>
+            <a href="{{ url_for('products.list_products') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<!-- Examples card -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">Product Examples</h5>
+        <ul>
+            <li><code>BEEHIVE 300G</code> - Specific product variant</li>
+            <li><code>GENERIC 300L</code> - Generic product type</li>
+            <li><code>R64-72</code> - Product code or SKU</li>
+            <li><code>VHAGAR</code> - Project or program name</li>
+            <li><code>OCM</code> - Sub-assembly or component</li>
+        </ul>
+        <div class="alert alert-info mt-3 mb-0">
+            <strong>Note:</strong> Products represent what your resources are working on. 
+            You'll be able to allocate loading percentages across products in the Loading Grid.
+        </div>
+    </div>
+</div>
+{% endblock %}

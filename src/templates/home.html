@@ -4,17 +4,19 @@
 <div class="p-5 bg-light rounded-3 mb-4">
 <h1 class="display-5">Verification Database Manager</h1>
 <p class="lead">
-Manage your items, types, characteristics, and loading percentages in one place.
+Manage your items, types, products, characteristics, and loading allocations in one place.
 </p>
 </div>
 
 <!-- Quick navigation cards -->
 <div class="row g-4">
 <!-- Item Types card -->
-<div class="col-md-6">
-<div class="card h-100">
+<div class="col-md-6 col-lg-4">
+<div class="card h-100 border-primary">
 <div class="card-body">
-<h5 class="card-title">📋 Item Types</h5>
+<h5 class="card-title">
+    <i class="bi bi-tag text-primary"></i> Item Types
+</h5>
 <p class="card-text">
 Define categories for your items (e.g., STATION, RESOURCE, UNIT).
 Start here if you're setting up a new database.
@@ -30,37 +32,62 @@ Add Type
 </div>
 
 <!-- Items card -->
-<div class="col-md-6">
-<div class="card h-100">
+<div class="col-md-6 col-lg-4">
+<div class="card h-100 border-success">
 <div class="card-body">
-<h5 class="card-title">📦 Items</h5>
+<h5 class="card-title">
+    <i class="bi bi-box text-success"></i> Items
+</h5>
 <p class="card-text">
 Create and manage items. Each item belongs to a type and can have
 characteristics and loading data.
 </p>
-<a href="{{ url_for('items.list_items') }}" class="btn btn-primary">
+<a href="{{ url_for('items.list_items') }}" class="btn btn-success">
 View Items
 </a>
-<a href="{{ url_for('items.add_form') }}" class="btn btn-outline-primary">
+<a href="{{ url_for('items.add_form') }}" class="btn btn-outline-success">
 Add Item
 </a>
 </div>
 </div>
 </div>
 
-<!-- Characteristics card -->
-<div class="col-md-6">
-<div class="card h-100">
+<!-- Products card -->
+<div class="col-md-6 col-lg-4">
+<div class="card h-100 border-info">
 <div class="card-body">
-<h5 class="card-title">🏷️ Characteristics</h5>
+<h5 class="card-title">
+    <i class="bi bi-basket text-info"></i> Products
+</h5>
+<p class="card-text">
+Define products that items work on. Allocate loading percentages
+across products per month.
+</p>
+<a href="{{ url_for('products.list_products') }}" class="btn btn-info text-white">
+View Products
+</a>
+<a href="{{ url_for('products.add_form') }}" class="btn btn-outline-info">
+Add Product
+</a>
+</div>
+</div>
+</div>
+
+<!-- Characteristics card -->
+<div class="col-md-6 col-lg-4">
+<div class="card h-100 border-warning">
+<div class="card-body">
+<h5 class="card-title">
+    <i class="bi bi-tags text-warning"></i> Characteristics
+</h5>
 <p class="card-text">
 Add key-value properties to items. Describe location, capacity, status,
 or any other attributes.
 </p>
-<a href="{{ url_for('characteristics.list_characteristics') }}" class="btn btn-primary">
+<a href="{{ url_for('characteristics.list_characteristics') }}" class="btn btn-warning">
 View Characteristics
 </a>
-<a href="{{ url_for('characteristics.add_form') }}" class="btn btn-outline-primary">
+<a href="{{ url_for('characteristics.add_form') }}" class="btn btn-outline-warning">
 Add Characteristic
 </a>
 </div>
@@ -68,15 +95,17 @@ Add Characteristic
 </div>
 
 <!-- Loading Grid card -->
-<div class="col-md-6">
-<div class="card h-100">
+<div class="col-md-6 col-lg-4">
+<div class="card h-100 border-danger">
 <div class="card-body">
-<h5 class="card-title">📊 Loading Grid</h5>
+<h5 class="card-title">
+    <i class="bi bi-grid-3x3 text-danger"></i> Loading Grid
+</h5>
 <p class="card-text">
-Edit loading percentages for items across different months.
-View and update multiple items in a convenient grid format.
+Edit loading percentages for items across products and months.
+Allocate capacity in a convenient grid format.
 </p>
-<a href="{{ url_for('loading.grid_selector') }}" class="btn btn-primary">
+<a href="{{ url_for('loading.grid_selector') }}" class="btn btn-danger">
 Open Grid
 </a>
 </div>
@@ -85,54 +114,97 @@ Open Grid
 </div>
 
 <!-- Getting Started guide -->
-<div class="card mt-4">
-<div class="card-header">
-<h5 class="mb-0">🚀 Getting Started</h5>
+<div class="card mt-4 border-primary">
+<div class="card-header bg-primary text-white">
+<h5 class="mb-0">
+    <i class="bi bi-rocket"></i> Getting Started
+</h5>
 </div>
 <div class="card-body">
-<ol>
+<ol class="mb-0">
 <li class="mb-2">
-<strong>Create Item Types:</strong> Define categories like STATION, RESOURCE, UNIT
+<strong>Create Item Types:</strong> Define categories like STATION, RESOURCE, UNIT, PRODUCT
 </li>
 <li class="mb-2">
-<strong>Add Items:</strong> Create items and assign them to types
+<strong>Add Items:</strong> Create items and assign them to types (stations, resources, etc.)
 </li>
 <li class="mb-2">
-<strong>Add Characteristics:</strong> Describe your items with key-value properties
+<strong>Add Products:</strong> Define products that represent what your items work on
+</li>
+<li class="mb-2">
+<strong>Map Products to Items:</strong> Specify which items can work on which products
+</li>
+<li class="mb-2">
+<strong>Add Characteristics:</strong> Describe your items with key-value properties (optional)
 </li>
 <li>
-<strong>Set Loading Percentages:</strong> Use the grid to manage monthly loading data
+<strong>Set Loading Allocations:</strong> Use the grid to manage monthly loading by product
 </li>
 </ol>
 </div>
 </div>
 
 <!-- Database structure info -->
-<div class="card mt-4">
-<div class="card-header">
-<h5 class="mb-0">📖 Database Structure</h5>
+<div class="row mt-4">
+<div class="col-md-6">
+<div class="card h-100">
+<div class="card-header bg-secondary text-white">
+<h5 class="mb-0">
+    <i class="bi bi-diagram-3"></i> Database Structure
+</h5>
 </div>
 <div class="card-body">
-<div class="row">
-<div class="col-md-6">
 <h6>Tables:</h6>
-<ul>
+<ul class="mb-0">
 <li><code>itemtypes</code> - Categories for items</li>
 <li><code>items</code> - The items being tracked</li>
 <li><code>itemcharacteristics</code> - Key-value properties</li>
-<li><code>itemloading</code> - Monthly loading percentages</li>
+<li><code>itemloading</code> - Monthly loading by product</li>
+<li><code>item_product_map</code> - Item-product relationships</li>
 </ul>
 </div>
+</div>
+</div>
+
 <div class="col-md-6">
-<h6>Relationships:</h6>
-<ul>
-<li>Items belong to one type</li>
-<li>Characteristics belong to one item</li>
-<li>Loading data belongs to one item</li>
-<li>Deleting items cascades to related data</li>
+<div class="card h-100">
+<div class="card-header bg-info text-white">
+<h5 class="mb-0">
+    <i class="bi bi-diagram-2"></i> Key Concepts
+</h5>
+</div>
+<div class="card-body">
+<h6>Product-Based Loading:</h6>
+<ul class="mb-0">
+<li>Items can work on multiple products</li>
+<li>Loading % allocated per product per month</li>
+<li>UNALLOCATED = idle/inactive capacity</li>
+<li>Monthly totals should sum to ≤100%</li>
+<li>Flexible allocation across products</li>
 </ul>
 </div>
 </div>
+</div>
+</div>
+
+<!-- Example scenario -->
+<div class="card mt-4 bg-light">
+<div class="card-body">
+<h5 class="card-title">
+    <i class="bi bi-lightbulb"></i> Example Scenario
+</h5>
+<p class="mb-2">
+<strong>Station DV-SPYKER</strong> in <strong>September 2025</strong>:
+</p>
+<ul class="mb-2">
+<li>50% allocated to <span class="badge bg-info">BEEHIVE 300G</span></li>
+<li>50% allocated to <span class="badge bg-info">GENERIC 300L</span></li>
+<li>0% <span class="badge bg-secondary">INACTIVE</span> (fully utilized)</li>
+</ul>
+<p class="text-muted mb-0">
+This flexible allocation model lets you track exactly what each item is working on,
+month by month, making capacity planning and resource optimization much easier.
+</p>
 </div>
 </div>
 {% endblock %}

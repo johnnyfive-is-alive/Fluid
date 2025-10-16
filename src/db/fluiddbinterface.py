@@ -4,13 +4,14 @@ from typing import Optional, Dict, Any, Iterable, Tuple, List
 
 class VerificationDB:
     """
-    SQLite helper matching fluid.db.sql schema exactly.
+    SQLite helper matching fluid.db.sql schema with product support.
 
     Tables:
       - itemtypes: id (PK), typename (UNIQUE)
       - items: id (PK), itemname, fkitemtype
       - itemcharacteristics: id (PK), fkitem, itemkey, itemvalue, itemkeyvaluetype
-      - itemloading: id (PK), fkitem, dailyrollupexists, monthyear, percent
+      - itemloading: id (PK), fkitem, dailyrollupexists, monthyear, percent, fkproduct (nullable)
+      - item_product_map: fkitem, fkproduct (composite PK)
     """
 
     def __init__(self, path: str):
@@ -222,7 +223,7 @@ class VerificationDB:
         )
 
     # ====================================================
-    # itemloading
+    # itemloading (with product support)
     # ====================================================
 
     def add_loading(
@@ -231,12 +232,13 @@ class VerificationDB:
             dailyrollupexists: int,
             monthyear: str,
             percent: float,
+            fkproduct: Optional[int] = None,
     ) -> int:
         """Insert itemloading. Returns auto-generated id."""
         cur = self._execute(
-            'INSERT INTO "itemloading" ("fkitem","dailyrollupexists","monthyear","percent") '
-            'VALUES (?,?,?,?);',
-            (fkitem, dailyrollupexists, monthyear, percent),
+            'INSERT INTO "itemloading" ("fkitem","dailyrollupexists","monthyear","percent","fkproduct") '
+            'VALUES (?,?,?,?,?);',
+            (fkitem, dailyrollupexists, monthyear, percent, fkproduct),
         )
         return cur.lastrowid
 
@@ -247,6 +249,7 @@ class VerificationDB:
             dailyrollupexists: Optional[int] = None,
             monthyear: Optional[str] = None,
             percent: Optional[float] = None,
+            fkproduct: Optional[int] = None,
     ) -> None:
         """Update itemloading by id."""
         set_clause, params = self._update_set_clause(
@@ -255,6 +258,7 @@ class VerificationDB:
                 "dailyrollupexists": dailyrollupexists,
                 "monthyear": monthyear,
                 "percent": percent,
+                "fkproduct": fkproduct,
             }
         )
         self._execute(f'UPDATE "itemloading" SET {set_clause} WHERE "id" = ?;', params + (id,))
@@ -268,11 +272,18 @@ class VerificationDB:
         cur = self._execute('SELECT * FROM "itemloading" WHERE "id" = ?;', (id,))
         return cur.fetchone()
 
-    def upsert_loading(self, fkitem: int, monthyear: str, percent: float) -> None:
-        """Insert or update loading percentage for item and month."""
+    def upsert_loading(
+            self,
+            fkitem: int,
+            monthyear: str,
+            percent: float,
+            fkproduct: Optional[int] = None
+    ) -> None:
+        """Insert or update loading percentage for item, month, and product."""
         cur = self._execute(
-            'SELECT "id" FROM "itemloading" WHERE "fkitem" = ? AND "monthyear" = ?;',
-            (fkitem, monthyear),
+            'SELECT "id" FROM "itemloading" WHERE "fkitem" = ? AND "monthyear" = ? AND '
+            '("fkproduct" = ? OR ("fkproduct" IS NULL AND ? IS NULL));',
+            (fkitem, monthyear, fkproduct, fkproduct),
         )
         existing = cur.fetchone()
 
@@ -282,23 +293,26 @@ class VerificationDB:
                 (percent, existing["id"]),
             )
         else:
-            self.add_loading(fkitem, 0, monthyear, percent)
+            self.add_loading(fkitem, 0, monthyear, percent, fkproduct)
 
-    def get_loadings_for_items(self, item_ids: List[int]) -> Dict[Tuple[int, str], float]:
-        """Return dict of (item_id, monthyear) -> percent for given items."""
+    def get_loadings_for_items(
+            self,
+            item_ids: List[int]
+    ) -> Dict[Tuple[int, str, Optional[int]], float]:
+        """Return dict of (item_id, monthyear, product_id) -> percent for given items."""
         if not item_ids:
             return {}
 
         placeholders = ",".join("?" * len(item_ids))
         cur = self._execute(
-            f'SELECT "fkitem", "monthyear", "percent" FROM "itemloading" '
+            f'SELECT "fkitem", "monthyear", "fkproduct", "percent" FROM "itemloading" '
             f'WHERE "fkitem" IN ({placeholders});',
             tuple(item_ids),
         )
 
         result = {}
         for row in cur.fetchall():
-            key = (row["fkitem"], row["monthyear"])
+            key = (row["fkitem"], row["monthyear"], row["fkproduct"])
             result[key] = row["percent"]
         return result
 
@@ -307,6 +321,7 @@ class VerificationDB:
             fkitem: Optional[int] = None,
             monthyear: Optional[str] = None,
             dailyrollupexists: Optional[int] = None,
+            fkproduct: Optional[int] = None,
     ) -> List[int]:
         """Return list of itemloading.id values matching filters."""
         return self._indices_by_fields(
@@ -316,8 +331,47 @@ class VerificationDB:
                 "fkitem": fkitem,
                 "monthyear": monthyear,
                 "dailyrollupexists": dailyrollupexists,
+                "fkproduct": fkproduct,
             },
         )
+
+    # ====================================================
+    # item_product_map
+    # ====================================================
+
+    def add_item_product_mapping(self, fkitem: int, fkproduct: int) -> None:
+        """Create item-product relationship."""
+        self._execute(
+            'INSERT OR IGNORE INTO "item_product_map" ("fkitem", "fkproduct") VALUES (?, ?);',
+            (fkitem, fkproduct),
+        )
+
+    def remove_item_product_mapping(self, fkitem: int, fkproduct: int) -> None:
+        """Remove item-product relationship."""
+        self._execute(
+            'DELETE FROM "item_product_map" WHERE "fkitem" = ? AND "fkproduct" = ?;',
+            (fkitem, fkproduct),
+        )
+
+    def get_products_for_item(self, fkitem: int) -> List[sqlite3.Row]:
+        """Get all products associated with an item."""
+        cur = self._execute(
+            'SELECT i.* FROM "items" i '
+            'JOIN "item_product_map" ipm ON i.id = ipm.fkproduct '
+            'WHERE ipm.fkitem = ? ORDER BY i.itemname;',
+            (fkitem,),
+        )
+        return cur.fetchall()
+
+    def get_items_for_product(self, fkproduct: int) -> List[sqlite3.Row]:
+        """Get all items associated with a product."""
+        cur = self._execute(
+            'SELECT i.* FROM "items" i '
+            'JOIN "item_product_map" ipm ON i.id = ipm.fkitem '
+            'WHERE ipm.fkproduct = ? ORDER BY i.itemname;',
+            (fkproduct,),
+        )
+        return cur.fetchall()
 
     # ====================================================
     # Listing helpers
@@ -330,6 +384,16 @@ class VerificationDB:
     def list_itemtypes(self) -> Iterable[sqlite3.Row]:
         """Get all itemtypes ordered by id."""
         return self._execute('SELECT * FROM "itemtypes" ORDER BY "id";').fetchall()
+
+    def list_products(self) -> Iterable[sqlite3.Row]:
+        """Get all items of type PRODUCT."""
+        cur = self._execute(
+            'SELECT i.* FROM "items" i '
+            'JOIN "itemtypes" it ON i.fkitemtype = it.id '
+            'WHERE it.typename = ? ORDER BY i.itemname;',
+            ('PRODUCT',),
+        )
+        return cur.fetchall()
 
     def list_characteristics_for_item(self, fkitem: int) -> Iterable[sqlite3.Row]:
         """Get all characteristics for an item."""
@@ -358,3 +422,20 @@ class VerificationDB:
         """Return items.id for a given itemname, or None if not found."""
         row = self.get_item_by_name(itemname)
         return int(row["id"]) if row else None
+
+    def get_or_create_unallocated_product(self) -> int:
+        """Get or create the UNALLOCATED product, return its id."""
+        # Get PRODUCT type id
+        product_type_id = self.get_itemtype_id_by_typename('PRODUCT')
+        if not product_type_id:
+            product_type_id = self.add_itemtype('PRODUCT')
+            self.con.commit()
+
+        # Get or create UNALLOCATED product
+        unallocated = self.get_item_by_name('UNALLOCATED')
+        if unallocated:
+            return unallocated['id']
+
+        unallocated_id = self.add_item('UNALLOCATED', product_type_id)
+        self.con.commit()
+        return unallocated_id
