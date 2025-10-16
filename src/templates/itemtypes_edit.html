@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Edit Item Type</h2>
+
+<!-- Edit form -->
+<div class="card">
+<div class="card-body">
+<form method="post" action="{{ url_for('itemtypes.edit_type', id=itemtype['id']) }}">
+<div class="mb-3">
+<label class="form-label">ID (read-only)</label>
+<input type="text" class="form-control" value="{{ itemtype['id'] }}" disabled>
+</div>
+
+<div class="mb-3">
+<label for="typename" class="form-label">Type Name</label>
+<input type="text" 
+       class="form-control" 
+       id="typename" 
+       name="typename" 
+       value="{{ itemtype['typename'] }}"
+       required
+       pattern="[A-Z_]+"
+       title="Use uppercase letters and underscores only">
+<div class="form-text">
+Use UPPERCASE letters (will be auto-converted). Names must be unique.
+</div>
+</div>
+
+<!-- Action buttons -->
+<button type="submit" class="btn btn-primary">Update Type</button>
+<a href="{{ url_for('itemtypes.list_types') }}" class="btn btn-secondary">Cancel</a>
+</form>
+</div>
+</div>
+
+<!-- Warning about changing types -->
+<div class="alert alert-warning mt-4">
+<strong>Warning:</strong> Changing the type name will affect all items using this type. 
+The change will be reflected immediately across the system.
+</div>
+{% endblock %}

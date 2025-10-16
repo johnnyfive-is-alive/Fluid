@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Add New Item Type</h2>
+
+<!-- Add form -->
+<div class="card">
+<div class="card-body">
+<form method="post" action="{{ url_for('itemtypes.add_type') }}">
+<div class="mb-3">
+<label for="typename" class="form-label">Type Name</label>
+<input type="text" 
+       class="form-control" 
+       id="typename" 
+       name="typename" 
+       placeholder="e.g., STATION, RESOURCE, UNIT" 
+       required
+       pattern="[A-Z_]+"
+       title="Use uppercase letters and underscores only">
+<div class="form-text">
+Use UPPERCASE letters (will be auto-converted). Names must be unique.
+</div>
+</div>
+
+<!-- Action buttons -->
+<button type="submit" class="btn btn-primary">Add Type</button>
+<a href="{{ url_for('itemtypes.list_types') }}" class="btn btn-secondary">Cancel</a>
+</form>
+</div>
+</div>
+
+<!-- Examples card -->
+<div class="card mt-4">
+<div class="card-body">
+<h5 class="card-title">Examples</h5>
+<ul>
+<li><code>STATION</code> - For station/location items</li>
+<li><code>RESOURCE</code> - For resource items</li>
+<li><code>UNIT</code> - For unit items</li>
+<li><code>EQUIPMENT</code> - For equipment items</li>
+</ul>
+</div>
+</div>
+{% endblock %}
