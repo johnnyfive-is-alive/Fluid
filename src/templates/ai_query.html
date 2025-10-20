@@ -270,23 +270,41 @@ function executeD3Code(code, data) {
     const chartDiv = document.getElementById('chart');
     chartDiv.innerHTML = '';
     
+    console.log('🎨 Executing D3 visualization code...');
+    console.log('Data structure:', data);
+    console.log('Code length:', code.length);
+
     try {
         // Inject data into global scope for D3 code
         window.chartData = data.data;
         window.pivotData = data;
-        
-        // Execute the D3 code
-        // Note: This is a simplified execution - in production, you'd want better sandboxing
-        const script = document.createElement('script');
-        script.textContent = code;
-        chartDiv.appendChild(script);
-        
+
+        console.log('✅ Data injected into window.chartData:', window.chartData);
+        console.log('✅ Data count:', window.chartData ? window.chartData.length : 0);
+
+        // Execute the D3 code using eval (wrapped in IIFE for safety)
+        (function() {
+            try {
+                eval(code);
+                console.log('✅ D3 code executed successfully');
+            } catch (evalError) {
+                console.error('❌ Error executing D3 code:', evalError);
+                throw evalError;
+            }
+        })();
+
     } catch (error) {
+        console.error('❌ Visualization error:', error);
         chartDiv.innerHTML = `
-            <div class="alert alert-warning">
+            <div class="alert alert-danger">
                 <strong>Visualization Error:</strong> ${error.message}
                 <br><br>
-                The D3 code may need manual adjustment. Check the Phase 3 debug panel for the generated code.
+                <details>
+                    <summary>Error Details</summary>
+                    <pre>${error.stack}</pre>
+                </details>
+                <br>
+                Check the browser console (F12) for more details.
             </div>
         `;
     }

@@ -29,19 +29,43 @@ d3.select('#chart')
   .text('No data returned from query');
 """
 
-    # Check if this is a simple list query (single column or just name/id columns)
-    if len(data[0].keys()) <= 3 and len(numeric_cols) == 0:
-        # Simple list - use card layout
+    # Debug logging to console
+    num_cols = len(data[0].keys()) if data else 0
+
+    print(f"🔍 Fallback viz detection:")
+    print(f"   - Columns: {num_cols}")
+    print(f"   - Numeric columns: {len(numeric_cols)}")
+    print(f"   - Categorical columns: {len(categorical_cols)}")
+    print(f"   - User prompt: '{user_prompt}'")
+
+    # Check if this is a simple list query (name/id columns with no numeric data)
+    # Or if it's a list-like query (mentions of "list", "show", "all")
+    is_list_query = (
+        len(numeric_cols) == 0 and  # No numeric columns
+        (num_cols <= 4 or  # 4 or fewer columns
+         'list' in user_prompt.lower() or  # Query mentions "list"
+         'show' in user_prompt.lower() or  # Query mentions "show"
+         'all' in user_prompt.lower())  # Query mentions "all"
+    )
+
+    print(f"   - Is list query: {is_list_query}")
+
+    if is_list_query:
+        print(f"   ✅ Using CARD LAYOUT")
         return generate_card_list()
 
     # Decide chart type based on data structure
     if len(categorical_cols) >= 1 and len(numeric_cols) >= 1:
+        print(f"   ✅ Using BAR CHART")
         return generate_bar_chart(categorical_cols[0], numeric_cols[0])
     elif len(numeric_cols) >= 2:
+        print(f"   ✅ Using SCATTER PLOT")
         return generate_scatter_plot(numeric_cols[0], numeric_cols[1])
     elif len(numeric_cols) == 1:
+        print(f"   ✅ Using HISTOGRAM")
         return generate_histogram(numeric_cols[0])
     else:
+        print(f"   ✅ Using TABLE")
         return generate_table()
 
 
@@ -266,7 +290,7 @@ def generate_bar_chart(cat_col: str, num_col: str) -> str:
     """Generate a bar chart D3.js code."""
     return f"""
 // Bar Chart: {cat_col} vs {num_col}
-const margin = {{top: 40, right: 30, bottom: 80, left: 60}};
+const margin = {{{{top: 40, right: 30, bottom: 80, left: 60}}}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
@@ -275,7 +299,7 @@ const svg = d3.select('#chart')
   .attr('width', width + margin.left + margin.right)
   .attr('height', height + margin.top + margin.bottom)
   .append('g')
-  .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+  .attr('transform', `translate(${{{{margin.left}}}},${{{{margin.top}}}})`);
 
 const data = window.chartData;
 
@@ -293,7 +317,7 @@ const y = d3.scaleLinear()
 
 // X axis
 svg.append('g')
-  .attr('transform', `translate(0,${{height}})`)
+  .attr('transform', `translate(0,${{{{height}}}})`)
   .call(d3.axisBottom(x))
   .selectAll('text')
   .attr('transform', 'rotate(-45)')
@@ -313,19 +337,19 @@ svg.selectAll('.bar')
   .attr('width', x.bandwidth())
   .attr('height', d => height - y(d['{num_col}']))
   .attr('fill', 'steelblue')
-  .on('mouseover', function(event, d) {{
+  .on('mouseover', function(event, d) {{{{
     d3.select(this).attr('fill', 'orange');
     svg.append('text')
       .attr('class', 'tooltip')
       .attr('x', x(d['{cat_col}']) + x.bandwidth() / 2)
       .attr('y', y(d['{num_col}']) - 10)
       .attr('text-anchor', 'middle')
-      .text(`${{d['{cat_col}']}}: ${{d['{num_col}']}}`);
-  }})
-  .on('mouseout', function() {{
+      .text(`${{{{d['{cat_col}']}}}}: ${{{{d['{num_col}']}}}}`);
+  }}}})
+  .on('mouseout', function() {{{{
     d3.select(this).attr('fill', 'steelblue');
     svg.selectAll('.tooltip').remove();
-  }});
+  }}}});
 
 // Title
 svg.append('text')
@@ -357,7 +381,7 @@ def generate_scatter_plot(x_col: str, y_col: str) -> str:
     """Generate a scatter plot D3.js code."""
     return f"""
 // Scatter Plot: {x_col} vs {y_col}
-const margin = {{top: 40, right: 30, bottom: 60, left: 60}};
+const margin = {{{{top: 40, right: 30, bottom: 60, left: 60}}}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
@@ -366,7 +390,7 @@ const svg = d3.select('#chart')
   .attr('width', width + margin.left + margin.right)
   .attr('height', height + margin.top + margin.bottom)
   .append('g')
-  .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+  .attr('transform', `translate(${{{{margin.left}}}},${{{{margin.top}}}})`);
 
 const data = window.chartData;
 
@@ -384,7 +408,7 @@ const y = d3.scaleLinear()
 
 // X axis
 svg.append('g')
-  .attr('transform', `translate(0,${{height}})`)
+  .attr('transform', `translate(0,${{{{height}}}})`)
   .call(d3.axisBottom(x));
 
 // Y axis
@@ -401,7 +425,7 @@ svg.selectAll('.dot')
   .attr('r', 5)
   .attr('fill', 'steelblue')
   .attr('opacity', 0.7)
-  .on('mouseover', function(event, d) {{
+  .on('mouseover', function(event, d) {{{{
     d3.select(this)
       .attr('r', 8)
       .attr('fill', 'orange');
@@ -410,14 +434,14 @@ svg.selectAll('.dot')
       .attr('x', x(d['{x_col}']))
       .attr('y', y(d['{y_col}']) - 15)
       .attr('text-anchor', 'middle')
-      .text(`({x_col}: ${{d['{x_col}']}}, {y_col}: ${{d['{y_col}']}})`);
-  }})
-  .on('mouseout', function() {{
+      .text(`({x_col}: ${{{{d['{x_col}']}}}}, {y_col}: ${{{{d['{y_col}']}}}})` );
+  }}}})
+  .on('mouseout', function() {{{{
     d3.select(this)
       .attr('r', 5)
       .attr('fill', 'steelblue');
     svg.selectAll('.tooltip').remove();
-  }});
+  }}}});
 
 // Title
 svg.append('text')
@@ -449,7 +473,7 @@ def generate_histogram(num_col: str) -> str:
     """Generate a histogram D3.js code."""
     return f"""
 // Histogram: {num_col}
-const margin = {{top: 40, right: 30, bottom: 60, left: 60}};
+const margin = {{{{top: 40, right: 30, bottom: 60, left: 60}}}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
@@ -458,7 +482,7 @@ const svg = d3.select('#chart')
   .attr('width', width + margin.left + margin.right)
   .attr('height', height + margin.top + margin.bottom)
   .append('g')
-  .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+  .attr('transform', `translate(${{{{margin.left}}}},${{{{margin.top}}}})`);
 
 const data = window.chartData.map(d => d['{num_col}']);
 
@@ -483,7 +507,7 @@ const y = d3.scaleLinear()
 
 // X axis
 svg.append('g')
-  .attr('transform', `translate(0,${{height}})`)
+  .attr('transform', `translate(0,${{{{height}}}})`)
   .call(d3.axisBottom(x));
 
 // Y axis
@@ -500,19 +524,19 @@ svg.selectAll('.bar')
   .attr('width', d => x(d.x1) - x(d.x0) - 1)
   .attr('height', d => height - y(d.length))
   .attr('fill', 'steelblue')
-  .on('mouseover', function(event, d) {{
+  .on('mouseover', function(event, d) {{{{
     d3.select(this).attr('fill', 'orange');
     svg.append('text')
       .attr('class', 'tooltip')
       .attr('x', x(d.x0) + (x(d.x1) - x(d.x0)) / 2)
       .attr('y', y(d.length) - 10)
       .attr('text-anchor', 'middle')
-      .text(`Count: ${{d.length}}`);
-  }})
-  .on('mouseout', function() {{
+      .text(`Count: ${{{{d.length}}}}`);
+  }}}})
+  .on('mouseout', function() {{{{
     d3.select(this).attr('fill', 'steelblue');
     svg.selectAll('.tooltip').remove();
-  }});
+  }}}});
 
 // Title
 svg.append('text')
@@ -544,7 +568,7 @@ def generate_line_chart(x_col: str, y_col: str) -> str:
     """Generate a line chart (useful for time series)."""
     return f"""
 // Line Chart: {x_col} vs {y_col}
-const margin = {{top: 40, right: 30, bottom: 60, left: 60}};
+const margin = {{{{top: 40, right: 30, bottom: 60, left: 60}}}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
@@ -553,7 +577,7 @@ const svg = d3.select('#chart')
   .attr('width', width + margin.left + margin.right)
   .attr('height', height + margin.top + margin.bottom)
   .append('g')
-  .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+  .attr('transform', `translate(${{{{margin.left}}}},${{{{margin.top}}}})`);
 
 const data = window.chartData;
 
@@ -577,7 +601,7 @@ const line = d3.line()
 
 // X axis
 svg.append('g')
-  .attr('transform', `translate(0,${{height}})`)
+  .attr('transform', `translate(0,${{{{height}}}})`)
   .call(d3.axisBottom(x))
   .selectAll('text')
   .attr('transform', 'rotate(-45)')
@@ -604,7 +628,7 @@ svg.selectAll('.dot')
   .attr('cy', d => y(d['{y_col}']))
   .attr('r', 4)
   .attr('fill', 'steelblue')
-  .on('mouseover', function(event, d) {{
+  .on('mouseover', function(event, d) {{{{
     d3.select(this)
       .attr('r', 6)
       .attr('fill', 'orange');
@@ -614,14 +638,14 @@ svg.selectAll('.dot')
       .attr('y', y(d['{y_col}']) - 15)
       .attr('text-anchor', 'middle')
       .style('font-size', '12px')
-      .text(`${{d['{x_col}']}}: ${{d['{y_col}']}}`);
-  }})
-  .on('mouseout', function() {{
+      .text(`${{{{d['{x_col}']}}}}: ${{{{d['{y_col}']}}}}`);
+  }}}})
+  .on('mouseout', function() {{{{
     d3.select(this)
       .attr('r', 4)
       .attr('fill', 'steelblue');
     svg.selectAll('.tooltip').remove();
-  }});
+  }}}});
 
 // Title
 svg.append('text')
