@@ -8,7 +8,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Path to your existing SQLite file (relative to app.py)
 DB_PATH = os.path.join(BASE_DIR, 'db', 'fluid.db')
 
-
 def get_db() -> VerificationDB:
     """
     Get database connection for current request context.
@@ -75,12 +74,14 @@ def create_app() -> Flask:
     from blueprints.items import bp as items_bp
     from blueprints.itemtypes import bp as itemtypes_bp
     from blueprints.products import bp as products_bp
+    from blueprints.ai_query import bp as ai_query_bp
 
     app.register_blueprint(characteristics_bp, url_prefix='/characteristics')
     app.register_blueprint(loading_bp, url_prefix='/loading')
     app.register_blueprint(items_bp, url_prefix='/items')
     app.register_blueprint(itemtypes_bp, url_prefix='/itemtypes')
     app.register_blueprint(products_bp, url_prefix='/products')
+    app.register_blueprint(ai_query_bp, url_prefix='/ai-query')
 
     @app.get('/')
     def home():

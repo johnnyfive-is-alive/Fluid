@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-robot"></i> AI-Powered Data Insights
+            </h2>
+            <a href="{{ url_for('ai_query.get_schema') }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+                <i class="bi bi-database"></i> View Schema
+            </a>
+        </div>
+
+        <!-- Query Input -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Ask Anything About Your Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="queryInput" class="form-label">Natural Language Query</label>
+                    <textarea class="form-control" id="queryInput" rows="3" 
+                              placeholder="Examples:&#10;- Show me loading percentages by product and month&#10;- Which items have the highest loading in 2025?&#10;- Compare characteristics across item types"></textarea>
+                </div>
+                <button class="btn btn-primary btn-lg" id="submitQuery" onclick="processQuery()">
+                    <i class="bi bi-magic"></i> Generate Insights
+                </button>
+                <div id="loadingSpinner" class="d-none mt-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <span class="ms-2">AI is processing your query...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Results -->
+        <div id="resultsContainer" class="d-none">
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart"></i> Visualization
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="chart" style="width: 100%; min-height: 500px;"></div>
+                </div>
+            </div>
+
+            <!-- Debug Information (Collapsible) -->
+            <div class="accordion" id="debugAccordion">
+                <!-- Phase 1: SQL Generation -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#phase1Collapse">
+                            <i class="bi bi-1-circle me-2"></i>
+                            Phase 1: SQL Query Generation
+                        </button>
+                    </h2>
+                    <div id="phase1Collapse" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                        <div class="accordion-body">
+                            <h6>Generated SQL Query:</h6>
+                            <pre id="phase1SQL" class="bg-light p-3 border rounded"><code></code></pre>
+                            <h6 class="mt-3">AI Response:</h6>
+                            <pre id="phase1Response" class="bg-light p-3 border rounded" style="max-height: 300px; overflow-y: auto;"><code></code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 2: Data Retrieval -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#phase2Collapse">
+                            <i class="bi bi-2-circle me-2"></i>
+                            Phase 2: Data Retrieval & Pivot Processing
+                        </button>
+                    </h2>
+                    <div id="phase2Collapse" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                        <div class="accordion-body">
+                            <h6>Row Count: <span id="phase2RowCount" class="badge bg-info"></span></h6>
+                            <h6 class="mt-3">Raw Data (first 100 rows):</h6>
+                            <div id="phase2RawData" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-sm table-striped">
+                                    <thead id="phase2TableHead"></thead>
+                                    <tbody id="phase2TableBody"></tbody>
+                                </table>
+                            </div>
+                            <h6 class="mt-3">Pivot Analysis:</h6>
+                            <pre id="phase2Pivot" class="bg-light p-3 border rounded" style="max-height: 300px; overflow-y: auto;"><code></code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 3: Visualization Code -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#phase3Collapse">
+                            <i class="bi bi-3-circle me-2"></i>
+                            Phase 3: D3.js Visualization Code
+                        </button>
+                    </h2>
+                    <div id="phase3Collapse" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                        <div class="accordion-body">
+                            <h6>Generated D3.js Code:</h6>
+                            <pre id="phase3Code" class="bg-light p-3 border rounded" style="max-height: 500px; overflow-y: auto;"><code></code></pre>
+                            <button class="btn btn-sm btn-secondary mt-2" onclick="copyToClipboard('phase3Code')">
+                                <i class="bi bi-clipboard"></i> Copy Code
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="errorContainer" class="d-none">
+            <div class="alert alert-danger" role="alert">
+                <h5 class="alert-heading">
+                    <i class="bi bi-exclamation-triangle"></i> Error
+                </h5>
+                <p id="errorMessage"></p>
+                <hr>
+                <p class="mb-0" id="errorDetails"></p>
+            </div>
+        </div>
+
+        <!-- Examples Card -->
+        <div class="card mt-4 border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightbulb"></i> Example Queries
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Loading Analysis:</h6>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <button class="btn btn-sm btn-outline-info" onclick="setQuery('Show me total loading by product across all months')">
+                                    📊 Total loading by product
+                                </button>
+                            </li>
+                            <li class="mb-2">
+                                <button class="btn btn-sm btn-outline-info" onclick="setQuery('Which items have loading greater than 50% in any month?')">
+                                    📈 High-load items
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Item Insights:</h6>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <button class="btn btn-sm btn-outline-info" onclick="setQuery('Show me all items with their types and characteristics')">
+                                    🏷️ Items with characteristics
+                                </button>
+                            </li>
+                            <li class="mb-2">
+                                <button class="btn btn-sm btn-outline-info" onclick="setQuery('Compare loading percentages across different item types')">
+                                    📊 Compare by type
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- D3.js -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+function setQuery(query) {
+    document.getElementById('queryInput').value = query;
+    document.getElementById('queryInput').focus();
+}
+
+function copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    const text = element.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Code copied to clipboard!');
+    });
+}
+
+async function processQuery() {
+    const query = document.getElementById('queryInput').value.trim();
+    
+    if (!query) {
+        alert('Please enter a query');
+        return;
+    }
+    
+    // Show loading, hide previous results
+    document.getElementById('loadingSpinner').classList.remove('d-none');
+    document.getElementById('resultsContainer').classList.add('d-none');
+    document.getElementById('errorContainer').classList.add('d-none');
+    document.getElementById('submitQuery').disabled = true;
+    
+    try {
+        const response = await fetch('/ai-query/process', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prompt: query })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
+        
+        // Display results
+        displayResults(data);
+        
+    } catch (error) {
+        displayError(error);
+    } finally {
+        document.getElementById('loadingSpinner').classList.add('d-none');
+        document.getElementById('submitQuery').disabled = false;
+    }
+}
+
+function displayResults(data) {
+    // Show results container
+    document.getElementById('resultsContainer').classList.remove('d-none');
+    
+    // Phase 1: SQL Generation
+    document.getElementById('phase1SQL').textContent = data.phase1_sql_generation.sql_query;
+    document.getElementById('phase1Response').textContent = data.phase1_sql_generation.ai_response;
+    
+    // Phase 2: Data Retrieval
+    document.getElementById('phase2RowCount').textContent = data.phase2_data_retrieval.row_count;
+    
+    // Build data table
+    const rawData = data.phase2_data_retrieval.raw_data;
+    if (rawData.length > 0) {
+        const columns = Object.keys(rawData[0]);
+        
+        // Table header
+        const thead = document.getElementById('phase2TableHead');
+        thead.innerHTML = '<tr>' + columns.map(col => `<th>${col}</th>`).join('') + '</tr>';
+        
+        // Table body (first 100 rows)
+        const tbody = document.getElementById('phase2TableBody');
+        tbody.innerHTML = rawData.slice(0, 100).map(row => 
+            '<tr>' + columns.map(col => `<td>${row[col]}</td>`).join('') + '</tr>'
+        ).join('');
+    }
+    
+    document.getElementById('phase2Pivot').textContent = JSON.stringify(data.phase2_data_retrieval.pivot_data, null, 2);
+    
+    // Phase 3: Visualization
+    document.getElementById('phase3Code').textContent = data.phase3_visualization.d3_code;
+    
+    // Execute D3 code
+    executeD3Code(data.phase3_visualization.d3_code, data.phase2_data_retrieval.pivot_data);
+}
+
+function executeD3Code(code, data) {
+    // Clear previous chart
+    const chartDiv = document.getElementById('chart');
+    chartDiv.innerHTML = '';
+    
+    try {
+        // Inject data into global scope for D3 code
+        window.chartData = data.data;
+        window.pivotData = data;
+        
+        // Execute the D3 code
+        // Note: This is a simplified execution - in production, you'd want better sandboxing
+        const script = document.createElement('script');
+        script.textContent = code;
+        chartDiv.appendChild(script);
+        
+    } catch (error) {
+        chartDiv.innerHTML = `
+            <div class="alert alert-warning">
+                <strong>Visualization Error:</strong> ${error.message}
+                <br><br>
+                The D3 code may need manual adjustment. Check the Phase 3 debug panel for the generated code.
+            </div>
+        `;
+    }
+}
+
+function displayError(error) {
+    document.getElementById('errorContainer').classList.remove('d-none');
+    document.getElementById('errorMessage').textContent = error.message;
+    document.getElementById('errorDetails').textContent = error.stack || 'No additional details available';
+}
+
+// Allow Enter key to submit
+document.getElementById('queryInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) {
+        processQuery();
+    }
+});
+</script>
+
+<style>
+#chart svg {
+    font-family: Arial, sans-serif;
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: #e7f1ff;
+    color: #0d6efd;
+}
+
+pre code {
+    display: block;
+    white-space: pre;
+    overflow-x: auto;
+}
+
+.btn-outline-info:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+</style>
+{% endblock %}
