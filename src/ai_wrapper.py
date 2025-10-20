@@ -213,82 +213,44 @@ class LlamaQueryProcessor:
     def phase1_generate_sql(self, user_prompt: str) -> Dict[str, Any]:
         """Phase 1: Generate SQL query from natural language with formatting awareness."""
 
-        system_context = f"""You are a SQL expert. Generate ONLY a valid SQLite query.
+        system_context = f"""SQLite query generator. Use ONLY SQLite syntax.
 
-DATABASE SCHEMA:
+SCHEMA:
 {self.schema}
 
-FORMATTING RULES - CRITICAL:
-1. Table: itemtypes
-   - Column 'typename' is ALWAYS UPPERCASE (e.g., 'STATION', 'PRODUCT', 'RESOURCE')
-   - When filtering or searching: WHERE typename = 'PRODUCT' (not 'Product' or 'product')
+SQLITE SYNTAX (NO PostgreSQL):
+1. NO EXTRACT, NO INTERVAL. monthyear is already 'YYYY-MM' format - use it directly
+2. Date math: date('now','-1 year') or use simple string: '2025-01'
+3. Current date: date('now') returns 'YYYY-MM-DD', use substr to get 'YYYY-MM'
+4. items.fkitemtype and il.fkproduct are INTs (foreign keys to items/itemtypes)
+5. items has NO fkproduct column - use il.fkproduct or item_product_map
+6. Percent is in itemloading: il.percent (NOT i.percent)
 
-2. Table: items - CAPITALIZATION BY TYPE:
-   - Column 'itemname' capitalization depends on item type:
-     * STATIONS (type='STATION'): ALWAYS UPPERCASE
-       Examples: 'DV-SPYKER', 'DV-JAGUAR', 'DV-NISSAN'
-       Query: WHERE itemname = 'DV-SPYKER' or WHERE itemname LIKE '%SPYKER%'
-     
-     * PRODUCTS (type='PRODUCT'): ALWAYS UPPERCASE
-       Examples: 'BEEHIVE 300G', 'GENERIC 300L', 'UNALLOCATED', 'R64-72'
-       Query: WHERE itemname = 'BEEHIVE 300G' or WHERE itemname LIKE '%BEEHIVE%'
-     
-     * RESOURCES (type='RESOURCE'): Mixed case (often person names)
-       Examples: 'Gabor Farkas', 'Steven Luo', 'Alexey Smirnov'
-       Query: Use exact case or case-insensitive LIKE
-     
-     * UNITS (type='UNIT'): Mixed case
-   
-   - IMPORTANT: When users mention stations or products, assume UPPERCASE
-   - Use LIKE with uppercase patterns for stations/products: WHERE itemname LIKE '%BEEHIVE%'
-   - For exact matches, use exact case: WHERE itemname = 'DV-SPYKER'
+EXAMPLE - Product usage over next year:
+SELECT 
+  COALESCE(p.itemname, 'UNALLOCATED') AS product,
+  il.monthyear,
+  COUNT(DISTINCT il.fkitem) AS station_count,
+  SUM(il.percent) AS total_percent
+FROM itemloading il
+LEFT JOIN items p ON il.fkproduct = p.id
+WHERE il.monthyear BETWEEN '2025-01' AND '2025-12'
+GROUP BY p.itemname, il.monthyear
+ORDER BY il.monthyear, p.itemname
 
-3. Table: itemcharacteristics
-   - Column 'itemkey': Mixed case, capitalized words
-     Examples: 'Location', 'Capacity', 'Status'
-   - Column 'itemvalue': Mixed case or numeric strings
-     Examples: 'Ottawa', 'Active', '500'
+Return ONLY SQL in ```sql blocks."""
 
-4. Table: itemloading
-   - Column 'monthyear': Format YYYY-MM (e.g., '2025-01', '2024-12')
-   - Column 'percent': Numeric decimal (0.0 to 100.0)
-   - Column 'fkproduct': NULL represents UNALLOCATED/INACTIVE capacity
-   - Business rule: For each item-month, percentages across all products should sum to ≤100%
+        prompt = f"Query: {user_prompt}"
 
-5. Special values to know:
-   - 'UNALLOCATED' is a special product representing idle/inactive capacity
-   - When fkproduct IS NULL in itemloading, it also means unallocated
-   - 'PRODUCT' is the typename for product items
-   - 'STATION' is the typename for station items
-
-QUERY GUIDELINES:
-- Use proper JOINs based on foreign keys shown above
-- For text comparisons, consider case sensitivity based on rules above
-- When searching products or stations: JOIN itemtypes and use uppercase patterns
-- For aggregations by month, use monthyear field directly (already formatted)
-- When grouping by product, handle NULL fkproduct as 'UNALLOCATED'
-
-RESPONSE FORMAT:
-- Wrap SQL in ```sql blocks
-- Use meaningful table aliases (i for items, it for itemtypes, il for itemloading, etc.)
-- Include column aliases for clarity
-- NO explanations, ONLY the query
-
-METADATA: PHASE=DATA_QUERY"""
-
-        prompt = f"User request: {user_prompt}\n\nGenerate the SQL query:"
-
-        print(f"🤖 Generating SQL with formatting rules...")
+        print(f"🤖 Generating SQL...")
         ai_response = self._call_llama(prompt, system_context, max_tokens=512)
         sql_query = self._extract_sql(ai_response)
 
-        # Basic validation
         if not sql_query.upper().startswith('SELECT'):
-            # Fallback: create a simple query
             sql_query = "SELECT * FROM items LIMIT 10;"
-            print("⚠️  AI didn't generate valid SQL, using fallback")
+            print("⚠️  Using fallback query")
 
-        print(f"✅ SQL generated: {sql_query[:50]}...")
+        print(f"✅ SQL: {sql_query[:50]}...")
 
         return {
             'prompt': prompt,
@@ -324,37 +286,74 @@ METADATA: PHASE=DATA_QUERY"""
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             categorical_cols = df.select_dtypes(exclude=['number']).columns.tolist()
 
+            # Convert DataFrame to JSON-safe format
+            json_safe_data = []
+            for _, row in df.iterrows():
+                row_dict = {}
+                for col in df.columns:
+                    val = row[col]
+                    # Convert pandas/numpy types to Python native types
+                    if pd.isna(val):
+                        row_dict[col] = None
+                    elif isinstance(val, (pd.Timestamp, pd.DatetimeTZDtype)):
+                        row_dict[col] = str(val)
+                    elif isinstance(val, (int, float, str, bool)):
+                        row_dict[col] = val
+                    else:
+                        # For any other type, try to convert to native Python type
+                        try:
+                            row_dict[col] = val.item() if hasattr(val, 'item') else str(val)
+                        except:
+                            row_dict[col] = str(val)
+                json_safe_data.append(row_dict)
+
             pivot_data = {
                 'columns': list(df.columns),
                 'numeric_columns': numeric_cols,
                 'categorical_columns': categorical_cols,
-                'data': raw_data,
+                'data': json_safe_data,
                 'summary': {}
             }
 
             if numeric_cols:
-                pivot_data['summary'] = {
-                    col: {
-                        'min': float(df[col].min()),
-                        'max': float(df[col].max()),
-                        'mean': float(df[col].mean()),
-                        'sum': float(df[col].sum()),
+                summary = {}
+                for col in numeric_cols:
+                    summary[col] = {
+                        'min': float(df[col].min()) if not pd.isna(df[col].min()) else None,
+                        'max': float(df[col].max()) if not pd.isna(df[col].max()) else None,
+                        'mean': float(df[col].mean()) if not pd.isna(df[col].mean()) else None,
+                        'sum': float(df[col].sum()) if not pd.isna(df[col].sum()) else None,
                         'count': int(df[col].count())
                     }
-                    for col in numeric_cols
-                }
+                pivot_data['summary'] = summary
 
             if categorical_cols and numeric_cols:
                 group_col = categorical_cols[0]
-                grouped = df.groupby(group_col)[numeric_cols].agg(['sum', 'mean', 'count']).reset_index()
-                pivot_data['grouped'] = grouped.to_dict('records')
+                try:
+                    grouped = df.groupby(group_col)[numeric_cols].agg(['sum', 'mean', 'count']).reset_index()
+                    # Flatten multi-index columns and convert to JSON-safe format
+                    grouped_simple = []
+                    for idx in range(len(grouped)):
+                        row_dict = {group_col: str(grouped.iloc[idx][group_col])}
+                        for num_col in numeric_cols:
+                            try:
+                                row_dict[f'{num_col}_sum'] = float(grouped[num_col]['sum'].iloc[idx])
+                                row_dict[f'{num_col}_mean'] = float(grouped[num_col]['mean'].iloc[idx])
+                                row_dict[f'{num_col}_count'] = int(grouped[num_col]['count'].iloc[idx])
+                            except:
+                                pass  # Skip if conversion fails
+                        grouped_simple.append(row_dict)
+                    pivot_data['grouped'] = grouped_simple
+                except:
+                    # If grouping fails, just skip it
+                    pass
 
-            print(f"✅ Retrieved {len(raw_data)} rows")
+            print(f"✅ Retrieved {len(json_safe_data)} rows")
 
             return {
-                'raw_data': raw_data,
+                'raw_data': json_safe_data,
                 'pivot_data': pivot_data,
-                'row_count': len(raw_data)
+                'row_count': len(json_safe_data)
             }
 
         except Exception as e:

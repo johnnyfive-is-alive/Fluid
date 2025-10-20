@@ -21,12 +21,13 @@ def generate_fallback_visualization(pivot_data: dict, user_prompt: str = "") -> 
     data = pivot_data.get('data', [])
 
     if not data:
+        print("⚠️  No data to visualize")
         return """
 // No data to visualize
 d3.select('#chart')
   .append('div')
   .attr('class', 'alert alert-warning')
-  .text('No data returned from query');
+  .html('<i class="bi bi-exclamation-triangle"></i> No data returned from query');
 """
 
     # Debug logging to console
@@ -34,12 +35,24 @@ d3.select('#chart')
 
     print(f"🔍 Fallback viz detection:")
     print(f"   - Columns: {num_cols}")
-    print(f"   - Numeric columns: {len(numeric_cols)}")
-    print(f"   - Categorical columns: {len(categorical_cols)}")
+    print(f"   - Column names: {list(data[0].keys())}")
+    print(f"   - Numeric columns: {len(numeric_cols)} - {numeric_cols}")
+    print(f"   - Categorical columns: {len(categorical_cols)} - {categorical_cols}")
     print(f"   - User prompt: '{user_prompt}'")
+    print(f"   - Row count: {len(data)}")
+
+    # Check if this has a monthyear column (time series data)
+    has_monthyear = any('month' in col.lower() for col in data[0].keys())
+    monthyear_col = None
+    if has_monthyear:
+        for col in categorical_cols:
+            if 'month' in col.lower():
+                monthyear_col = col
+                break
+
+    print(f"   - Has monthyear: {has_monthyear}, Column: {monthyear_col}")
 
     # Check if this is a simple list query (name/id columns with no numeric data)
-    # Or if it's a list-like query (mentions of "list", "show", "all")
     is_list_query = (
         len(numeric_cols) == 0 and  # No numeric columns
         (num_cols <= 4 or  # 4 or fewer columns
@@ -54,6 +67,17 @@ d3.select('#chart')
         print(f"   ✅ Using CARD LAYOUT")
         return generate_card_list()
 
+    # Time series: if we have monthyear and numeric columns, use grouped bar chart
+    if monthyear_col and len(numeric_cols) >= 1:
+        # Check if we also have a grouping column (like product)
+        other_cats = [c for c in categorical_cols if c != monthyear_col]
+        if other_cats and len(numeric_cols) >= 1:
+            print(f"   ✅ Using GROUPED BAR CHART (time series with groups)")
+            return generate_grouped_bar_chart(monthyear_col, other_cats[0], numeric_cols[0])
+        elif len(numeric_cols) >= 1:
+            print(f"   ✅ Using LINE CHART (time series)")
+            return generate_line_chart(monthyear_col, numeric_cols[0])
+
     # Decide chart type based on data structure
     if len(categorical_cols) >= 1 and len(numeric_cols) >= 1:
         print(f"   ✅ Using BAR CHART")
@@ -65,7 +89,7 @@ d3.select('#chart')
         print(f"   ✅ Using HISTOGRAM")
         return generate_histogram(numeric_cols[0])
     else:
-        print(f"   ✅ Using TABLE")
+        print(f"   ✅ Using TABLE (fallback)")
         return generate_table()
 
 
@@ -73,20 +97,30 @@ def generate_card_list() -> str:
     """Generate a card-based list view for simple data (like lists of names)."""
     return """
 // Card List View for Simple Data
+console.log('📋 Rendering card list view...');
+console.log('Data:', window.chartData);
+
 const data = window.chartData;
 
 if (!data || data.length === 0) {
+  console.error('❌ No data available for card list');
   d3.select('#chart')
     .append('div')
     .attr('class', 'alert alert-warning')
     .html('<i class="bi bi-exclamation-triangle"></i> No data to display');
 } else {
+  console.log('✅ Rendering', data.length, 'cards');
   const columns = Object.keys(data[0]);
+  console.log('Columns:', columns);
+  
   const container = d3.select('#chart');
+  
+  // Clear any existing content
+  container.html('');
   
   // Header with count
   const header = container.append('div')
-    .attr('class', 'card mb-3');
+    .attr('class', 'card mb-3 shadow-sm');
   
   header.append('div')
     .attr('class', 'card-body bg-primary text-white')
@@ -133,8 +167,8 @@ if (!data || data.length === 0) {
           .append('span')
           .attr('class', 'badge bg-secondary')
           .text(d[col]);
-      } else if (col.toLowerCase().includes('name') || idx === 1) {
-        // Primary field - large and bold
+      } else if (col.toLowerCase().includes('name') || idx === 0) {
+        // Primary field - large and bold (use first column if no 'name' found)
         body.append('h5')
           .attr('class', 'card-title mb-3')
           .html(`<i class="bi bi-tag-fill text-primary"></i> ${d[col]}`);
@@ -159,6 +193,8 @@ if (!data || data.length === 0) {
     .append('div')
     .attr('class', 'card-footer text-muted')
     .html(`<small><i class="bi bi-info-circle"></i> Showing ${data.length} result(s) in card view</small>`);
+  
+  console.log('✅ Card list rendered successfully');
 }
 """
 
@@ -167,17 +203,26 @@ def generate_table() -> str:
     """Generate a styled table when no numeric data is available."""
     return """
 // Data Table with Card Layout
+console.log('📊 Rendering table view...');
+console.log('Data:', window.chartData);
+
 const data = window.chartData;
 
 if (!data || data.length === 0) {
+  console.error('❌ No data available for table');
   d3.select('#chart')
     .append('div')
     .attr('class', 'alert alert-warning')
     .html('<i class="bi bi-exclamation-triangle"></i> No data to display');
 } else {
+  console.log('✅ Rendering table with', data.length, 'rows');
   const columns = Object.keys(data[0]);
+  console.log('Columns:', columns);
   
   const container = d3.select('#chart');
+  
+  // Clear any existing content
+  container.html('');
   
   // Add info header
   container.append('div')
@@ -282,42 +327,191 @@ if (!data || data.length === 0) {
   
   cardFooter.append('small')
     .html(`<i class="bi bi-database"></i> Showing <strong>${data.length}</strong> row(s) × <strong>${columns.length}</strong> column(s)`);
+  
+  console.log('✅ Table rendered successfully');
 }
 """
 
 
-def generate_bar_chart(cat_col: str, num_col: str) -> str:
-    """Generate a bar chart D3.js code."""
-    return f"""
-// Bar Chart: {cat_col} vs {num_col}
-const margin = {{{{top: 40, right: 30, bottom: 80, left: 60}}}};
+def generate_grouped_bar_chart(time_col: str, group_col: str, value_col: str) -> str:
+    """Generate a grouped bar chart for time series with multiple groups."""
+    code = """
+// Grouped Bar Chart: """ + time_col + """ by """ + group_col + """
+console.log('📊 Rendering grouped bar chart...');
+const margin = {top: 40, right: 120, bottom: 80, left: 60};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
 const svg = d3.select('#chart')
+  .html('')
   .append('svg')
   .attr('width', width + margin.left + margin.right)
   .attr('height', height + margin.top + margin.bottom)
   .append('g')
-  .attr('transform', `translate(${{{{margin.left}}}},${{{{margin.top}}}})`);
+  .attr('transform', `translate(${margin.left},${margin.top})`);
 
 const data = window.chartData;
 
-// X scale
-const x = d3.scaleBand()
-  .domain(data.map(d => d['{cat_col}']))
+// Get unique months and groups
+const months = [...new Set(data.map(d => d['""" + time_col + """']))].sort();
+const groups = [...new Set(data.map(d => d['""" + group_col + """']))];
+
+// Color scale for groups
+const color = d3.scaleOrdinal()
+  .domain(groups)
+  .range(d3.schemeSet2);
+
+// X scale for months
+const x0 = d3.scaleBand()
+  .domain(months)
   .range([0, width])
   .padding(0.2);
 
+// X scale for groups within each month
+const x1 = d3.scaleBand()
+  .domain(groups)
+  .range([0, x0.bandwidth()])
+  .padding(0.05);
+
 // Y scale
 const y = d3.scaleLinear()
-  .domain([0, d3.max(data, d => d['{num_col}'])])
+  .domain([0, d3.max(data, d => d['""" + value_col + """'])])
   .nice()
   .range([height, 0]);
 
 // X axis
 svg.append('g')
-  .attr('transform', `translate(0,${{{{height}}}})`)
+  .attr('transform', `translate(0,${height})`)
+  .call(d3.axisBottom(x0))
+  .selectAll('text')
+  .attr('transform', 'rotate(-45)')
+  .style('text-anchor', 'end');
+
+// Y axis
+svg.append('g')
+  .call(d3.axisLeft(y));
+
+// Create groups for each month
+const monthGroups = svg.selectAll('.month-group')
+  .data(months)
+  .join('g')
+  .attr('class', 'month-group')
+  .attr('transform', d => `translate(${x0(d)},0)`);
+
+// Add bars for each group within month
+monthGroups.each(function(month) {
+  const monthData = data.filter(d => d['""" + time_col + """'] === month);
+  
+  d3.select(this).selectAll('.bar')
+    .data(monthData)
+    .join('rect')
+    .attr('class', 'bar')
+    .attr('x', d => x1(d['""" + group_col + """']))
+    .attr('y', d => y(d['""" + value_col + """']))
+    .attr('width', x1.bandwidth())
+    .attr('height', d => height - y(d['""" + value_col + """']))
+    .attr('fill', d => color(d['""" + group_col + """']))
+    .on('mouseover', function(event, d) {
+      d3.select(this).attr('opacity', 0.7);
+      svg.append('text')
+        .attr('class', 'tooltip')
+        .attr('x', x0(d['""" + time_col + """']) + x1(d['""" + group_col + """']) + x1.bandwidth() / 2)
+        .attr('y', y(d['""" + value_col + """']) - 10)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .text(`${d['""" + group_col + """']}: ${d['""" + value_col + """']}`);
+    })
+    .on('mouseout', function() {
+      d3.select(this).attr('opacity', 1);
+      svg.selectAll('.tooltip').remove();
+    });
+});
+
+// Legend
+const legend = svg.append('g')
+  .attr('class', 'legend')
+  .attr('transform', `translate(${width + 20}, 0)`);
+
+groups.forEach((group, i) => {
+  const legendRow = legend.append('g')
+    .attr('transform', `translate(0, ${i * 20})`);
+  
+  legendRow.append('rect')
+    .attr('width', 15)
+    .attr('height', 15)
+    .attr('fill', color(group));
+  
+  legendRow.append('text')
+    .attr('x', 20)
+    .attr('y', 12)
+    .style('font-size', '12px')
+    .text(group);
+});
+
+// Title
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', -10)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '16px')
+  .style('font-weight', 'bold')
+  .text('""" + value_col + """ by """ + group_col + """ over time');
+
+// X label
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', height + margin.bottom - 10)
+  .attr('text-anchor', 'middle')
+  .text('""" + time_col + """');
+
+// Y label
+svg.append('text')
+  .attr('transform', 'rotate(-90)')
+  .attr('x', -height / 2)
+  .attr('y', -40)
+  .attr('text-anchor', 'middle')
+  .text('""" + value_col + """');
+
+console.log('✅ Grouped bar chart rendered');
+"""
+    return code
+
+
+def generate_bar_chart(cat_col: str, num_col: str) -> str:
+    """Generate a bar chart D3.js code."""
+    # Use string concatenation to avoid f-string brace issues
+    code = """
+// Bar Chart: """ + cat_col + """ vs """ + num_col + """
+console.log('📊 Rendering bar chart...');
+const margin = {top: 40, right: 30, bottom: 80, left: 60};
+const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
+const height = 500 - margin.top - margin.bottom;
+
+const svg = d3.select('#chart')
+  .html('')
+  .append('svg')
+  .attr('width', width + margin.left + margin.right)
+  .attr('height', height + margin.top + margin.bottom)
+  .append('g')
+  .attr('transform', `translate(${margin.left},${margin.top})`);
+
+const data = window.chartData;
+
+// X scale
+const x = d3.scaleBand()
+  .domain(data.map(d => d['""" + cat_col + """']))
+  .range([0, width])
+  .padding(0.2);
+
+// Y scale
+const y = d3.scaleLinear()
+  .domain([0, d3.max(data, d => d['""" + num_col + """'])])
+  .nice()
+  .range([height, 0]);
+
+// X axis
+svg.append('g')
+  .attr('transform', `translate(0,${height})`)
   .call(d3.axisBottom(x))
   .selectAll('text')
   .attr('transform', 'rotate(-45)')
@@ -332,24 +526,24 @@ svg.selectAll('.bar')
   .data(data)
   .join('rect')
   .attr('class', 'bar')
-  .attr('x', d => x(d['{cat_col}']))
-  .attr('y', d => y(d['{num_col}']))
+  .attr('x', d => x(d['""" + cat_col + """']))
+  .attr('y', d => y(d['""" + num_col + """']))
   .attr('width', x.bandwidth())
-  .attr('height', d => height - y(d['{num_col}']))
+  .attr('height', d => height - y(d['""" + num_col + """']))
   .attr('fill', 'steelblue')
-  .on('mouseover', function(event, d) {{{{
+  .on('mouseover', function(event, d) {
     d3.select(this).attr('fill', 'orange');
     svg.append('text')
       .attr('class', 'tooltip')
-      .attr('x', x(d['{cat_col}']) + x.bandwidth() / 2)
-      .attr('y', y(d['{num_col}']) - 10)
+      .attr('x', x(d['""" + cat_col + """']) + x.bandwidth() / 2)
+      .attr('y', y(d['""" + num_col + """']) - 10)
       .attr('text-anchor', 'middle')
-      .text(`${{{{d['{cat_col}']}}}}: ${{{{d['{num_col}']}}}}`);
-  }}}})
-  .on('mouseout', function() {{{{
+      .text(`${d['""" + cat_col + """']}: ${d['""" + num_col + """']}`);
+  })
+  .on('mouseout', function() {
     d3.select(this).attr('fill', 'steelblue');
     svg.selectAll('.tooltip').remove();
-  }}}});
+  });
 
 // Title
 svg.append('text')
@@ -358,14 +552,14 @@ svg.append('text')
   .attr('text-anchor', 'middle')
   .style('font-size', '16px')
   .style('font-weight', 'bold')
-  .text('{cat_col} vs {num_col}');
+  .text('""" + cat_col + """ vs """ + num_col + """');
 
 // X label
 svg.append('text')
   .attr('x', width / 2)
   .attr('y', height + margin.bottom - 10)
   .attr('text-anchor', 'middle')
-  .text('{cat_col}');
+  .text('""" + cat_col + """');
 
 // Y label
 svg.append('text')
@@ -373,19 +567,24 @@ svg.append('text')
   .attr('x', -height / 2)
   .attr('y', -40)
   .attr('text-anchor', 'middle')
-  .text('{num_col}');
+  .text('""" + num_col + """');
+
+console.log('✅ Bar chart rendered');
 """
+    return code
 
 
 def generate_scatter_plot(x_col: str, y_col: str) -> str:
     """Generate a scatter plot D3.js code."""
     return f"""
 // Scatter Plot: {x_col} vs {y_col}
+console.log('📊 Rendering scatter plot...');
 const margin = {{{{top: 40, right: 30, bottom: 60, left: 60}}}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
 const svg = d3.select('#chart')
+  .html('')  // Clear existing
   .append('svg')
   .attr('width', width + margin.left + margin.right)
   .attr('height', height + margin.top + margin.bottom)
@@ -424,24 +623,7 @@ svg.selectAll('.dot')
   .attr('cy', d => y(d['{y_col}']))
   .attr('r', 5)
   .attr('fill', 'steelblue')
-  .attr('opacity', 0.7)
-  .on('mouseover', function(event, d) {{{{
-    d3.select(this)
-      .attr('r', 8)
-      .attr('fill', 'orange');
-    svg.append('text')
-      .attr('class', 'tooltip')
-      .attr('x', x(d['{x_col}']))
-      .attr('y', y(d['{y_col}']) - 15)
-      .attr('text-anchor', 'middle')
-      .text(`({x_col}: ${{{{d['{x_col}']}}}}, {y_col}: ${{{{d['{y_col}']}}}})` );
-  }}}})
-  .on('mouseout', function() {{{{
-    d3.select(this)
-      .attr('r', 5)
-      .attr('fill', 'steelblue');
-    svg.selectAll('.tooltip').remove();
-  }}}});
+  .attr('opacity', 0.7);
 
 // Title
 svg.append('text')
@@ -452,20 +634,7 @@ svg.append('text')
   .style('font-weight', 'bold')
   .text('{x_col} vs {y_col}');
 
-// X label
-svg.append('text')
-  .attr('x', width / 2)
-  .attr('y', height + 40)
-  .attr('text-anchor', 'middle')
-  .text('{x_col}');
-
-// Y label
-svg.append('text')
-  .attr('transform', 'rotate(-90)')
-  .attr('x', -height / 2)
-  .attr('y', -40)
-  .attr('text-anchor', 'middle')
-  .text('{y_col}');
+console.log('✅ Scatter plot rendered');
 """
 
 
@@ -473,11 +642,13 @@ def generate_histogram(num_col: str) -> str:
     """Generate a histogram D3.js code."""
     return f"""
 // Histogram: {num_col}
+console.log('📊 Rendering histogram...');
 const margin = {{{{top: 40, right: 30, bottom: 60, left: 60}}}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
 const svg = d3.select('#chart')
+  .html('')  // Clear existing
   .append('svg')
   .attr('width', width + margin.left + margin.right)
   .attr('height', height + margin.top + margin.bottom)
@@ -523,20 +694,7 @@ svg.selectAll('.bar')
   .attr('y', d => y(d.length))
   .attr('width', d => x(d.x1) - x(d.x0) - 1)
   .attr('height', d => height - y(d.length))
-  .attr('fill', 'steelblue')
-  .on('mouseover', function(event, d) {{{{
-    d3.select(this).attr('fill', 'orange');
-    svg.append('text')
-      .attr('class', 'tooltip')
-      .attr('x', x(d.x0) + (x(d.x1) - x(d.x0)) / 2)
-      .attr('y', y(d.length) - 10)
-      .attr('text-anchor', 'middle')
-      .text(`Count: ${{{{d.length}}}}`);
-  }}}})
-  .on('mouseout', function() {{{{
-    d3.select(this).attr('fill', 'steelblue');
-    svg.selectAll('.tooltip').remove();
-  }}}});
+  .attr('fill', 'steelblue');
 
 // Title
 svg.append('text')
@@ -547,127 +705,5 @@ svg.append('text')
   .style('font-weight', 'bold')
   .text('Distribution of {num_col}');
 
-// X label
-svg.append('text')
-  .attr('x', width / 2)
-  .attr('y', height + 40)
-  .attr('text-anchor', 'middle')
-  .text('{num_col}');
-
-// Y label
-svg.append('text')
-  .attr('transform', 'rotate(-90)')
-  .attr('x', -height / 2)
-  .attr('y', -40)
-  .attr('text-anchor', 'middle')
-  .text('Frequency');
-"""
-
-
-def generate_line_chart(x_col: str, y_col: str) -> str:
-    """Generate a line chart (useful for time series)."""
-    return f"""
-// Line Chart: {x_col} vs {y_col}
-const margin = {{{{top: 40, right: 30, bottom: 60, left: 60}}}};
-const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
-const height = 500 - margin.top - margin.bottom;
-
-const svg = d3.select('#chart')
-  .append('svg')
-  .attr('width', width + margin.left + margin.right)
-  .attr('height', height + margin.top + margin.bottom)
-  .append('g')
-  .attr('transform', `translate(${{{{margin.left}}}},${{{{margin.top}}}})`);
-
-const data = window.chartData;
-
-// X scale (assuming categorical/ordinal for now)
-const x = d3.scaleBand()
-  .domain(data.map(d => d['{x_col}']))
-  .range([0, width])
-  .padding(0.1);
-
-// Y scale
-const y = d3.scaleLinear()
-  .domain([0, d3.max(data, d => d['{y_col}'])])
-  .nice()
-  .range([height, 0]);
-
-// Line generator
-const line = d3.line()
-  .x(d => x(d['{x_col}']) + x.bandwidth() / 2)
-  .y(d => y(d['{y_col}']))
-  .curve(d3.curveMonotoneX);
-
-// X axis
-svg.append('g')
-  .attr('transform', `translate(0,${{{{height}}}})`)
-  .call(d3.axisBottom(x))
-  .selectAll('text')
-  .attr('transform', 'rotate(-45)')
-  .style('text-anchor', 'end');
-
-// Y axis
-svg.append('g')
-  .call(d3.axisLeft(y));
-
-// Draw line
-svg.append('path')
-  .datum(data)
-  .attr('fill', 'none')
-  .attr('stroke', 'steelblue')
-  .attr('stroke-width', 2)
-  .attr('d', line);
-
-// Add points
-svg.selectAll('.dot')
-  .data(data)
-  .join('circle')
-  .attr('class', 'dot')
-  .attr('cx', d => x(d['{x_col}']) + x.bandwidth() / 2)
-  .attr('cy', d => y(d['{y_col}']))
-  .attr('r', 4)
-  .attr('fill', 'steelblue')
-  .on('mouseover', function(event, d) {{{{
-    d3.select(this)
-      .attr('r', 6)
-      .attr('fill', 'orange');
-    svg.append('text')
-      .attr('class', 'tooltip')
-      .attr('x', x(d['{x_col}']) + x.bandwidth() / 2)
-      .attr('y', y(d['{y_col}']) - 15)
-      .attr('text-anchor', 'middle')
-      .style('font-size', '12px')
-      .text(`${{{{d['{x_col}']}}}}: ${{{{d['{y_col}']}}}}`);
-  }}}})
-  .on('mouseout', function() {{{{
-    d3.select(this)
-      .attr('r', 4)
-      .attr('fill', 'steelblue');
-    svg.selectAll('.tooltip').remove();
-  }}}});
-
-// Title
-svg.append('text')
-  .attr('x', width / 2)
-  .attr('y', -10)
-  .attr('text-anchor', 'middle')
-  .style('font-size', '16px')
-  .style('font-weight', 'bold')
-  .text('{x_col} vs {y_col}');
-
-// X label
-svg.append('text')
-  .attr('x', width / 2)
-  .attr('y', height + margin.bottom - 10)
-  .attr('text-anchor', 'middle')
-  .text('{x_col}');
-
-// Y label
-svg.append('text')
-  .attr('transform', 'rotate(-90)')
-  .attr('x', -height / 2)
-  .attr('y', -40)
-  .attr('text-anchor', 'middle')
-  .text('{y_col}');
+console.log('✅ Histogram rendered');
 """
