@@ -2,34 +2,15 @@
 {% block content %}
 <!-- Welcome header -->
 <div class="p-5 bg-light rounded-3 mb-4">
-<h1 class="display-5">Verification Database Manager</h1>
+<h1 class="display-5">Frankenstein Verification Resource Manager</h1>
 <p class="lead">
-Manage your items, types, products, characteristics, and loading allocations in one place.
+Manage your resources, stations, products,and loading allocations in one place.
 </p>
 </div>
 
 <!-- Quick navigation cards -->
 <div class="row g-4">
-<!-- Item Types card -->
-<div class="col-md-6 col-lg-4">
-<div class="card h-100 border-primary">
-<div class="card-body">
-<h5 class="card-title">
-    <i class="bi bi-tag text-primary"></i> Item Types
-</h5>
-<p class="card-text">
-Define categories for your items (e.g., STATION, RESOURCE, UNIT).
-Start here if you're setting up a new database.
-</p>
-<a href="{{ url_for('itemtypes.list_types') }}" class="btn btn-primary">
-View Types
-</a>
-<a href="{{ url_for('itemtypes.add_form') }}" class="btn btn-outline-primary">
-Add Type
-</a>
-</div>
-</div>
-</div>
+
 
 <!-- Items card -->
 <div class="col-md-6 col-lg-4">
@@ -39,8 +20,7 @@ Add Type
     <i class="bi bi-box text-success"></i> Items
 </h5>
 <p class="card-text">
-Create and manage items. Each item belongs to a type and can have
-characteristics and loading data.
+Add/Remove or Edit Staff, Stations, or Units in the database.
 </p>
 <a href="{{ url_for('items.list_items') }}" class="btn btn-success">
 View Items
@@ -60,8 +40,7 @@ Add Item
     <i class="bi bi-basket text-info"></i> Products
 </h5>
 <p class="card-text">
-Define products that items work on. Allocate loading percentages
-across products per month.
+Define products that Staff or Stations are allocated to.
 </p>
 <a href="{{ url_for('products.list_products') }}" class="btn btn-info text-white">
 View Products
@@ -102,8 +81,8 @@ Add Characteristic
     <i class="bi bi-grid-3x3 text-danger"></i> Loading Grid
 </h5>
 <p class="card-text">
-Edit loading percentages for items across products and months.
-Allocate capacity in a convenient grid format.
+Edit loading percentages for Staff, Stations or Units across products and months.
+Allocation assignment in a convenient grid format.
 </p>
 <a href="{{ url_for('loading.grid_selector') }}" class="btn btn-danger">
 Open Grid
@@ -122,9 +101,6 @@ Open Grid
 </div>
 <div class="card-body">
 <ol class="mb-0">
-<li class="mb-2">
-<strong>Create Item Types:</strong> Define categories like STATION, RESOURCE, UNIT, PRODUCT
-</li>
 <li class="mb-2">
 <strong>Add Items:</strong> Create items and assign them to types (stations, resources, etc.)
 </li>
@@ -147,43 +123,11 @@ Open Grid
 <!-- Database structure info -->
 <div class="row mt-4">
 <div class="col-md-6">
-<div class="card h-100">
-<div class="card-header bg-secondary text-white">
-<h5 class="mb-0">
-    <i class="bi bi-diagram-3"></i> Database Structure
-</h5>
-</div>
-<div class="card-body">
-<h6>Tables:</h6>
-<ul class="mb-0">
-<li><code>itemtypes</code> - Categories for items</li>
-<li><code>items</code> - The items being tracked</li>
-<li><code>itemcharacteristics</code> - Key-value properties</li>
-<li><code>itemloading</code> - Monthly loading by product</li>
-<li><code>item_product_map</code> - Item-product relationships</li>
-</ul>
-</div>
-</div>
+
 </div>
 
 <div class="col-md-6">
-<div class="card h-100">
-<div class="card-header bg-info text-white">
-<h5 class="mb-0">
-    <i class="bi bi-diagram-2"></i> Key Concepts
-</h5>
-</div>
-<div class="card-body">
-<h6>Product-Based Loading:</h6>
-<ul class="mb-0">
-<li>Items can work on multiple products</li>
-<li>Loading % allocated per product per month</li>
-<li>UNALLOCATED = idle/inactive capacity</li>
-<li>Monthly totals should sum to ≤100%</li>
-<li>Flexible allocation across products</li>
-</ul>
-</div>
-</div>
+
 </div>
 </div>
 
