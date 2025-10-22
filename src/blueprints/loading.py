@@ -129,6 +129,7 @@ def grid_save():
     db = get_db()
 
     updates = 0
+    deletes = 0
     errors = []
 
     # Parse all form fields that start with "percent-"
@@ -160,18 +161,44 @@ def grid_save():
             item_id = int(item_id_str)
             product_id = int(product_id_str) if product_id_str != 'None' else None
 
-            # Skip empty values
+            # Handle empty values or 0% - DELETE the entry
             if not value or value.strip() == '':
+                # Find and delete the existing entry
+                cur = db._execute(
+                    'SELECT "id" FROM "itemloading" WHERE "fkitem" = ? AND "monthyear" = ? AND '
+                    '("fkproduct" = ? OR ("fkproduct" IS NULL AND ? IS NULL));',
+                    (item_id, monthyear, product_id, product_id),
+                )
+                existing = cur.fetchone()
+
+                if existing:
+                    db.delete_loading(existing["id"])
+                    deletes += 1
                 continue
 
             percent = float(value)
+
+            # If percent is 0, treat it as a delete
+            if percent == 0:
+                # Find and delete the existing entry
+                cur = db._execute(
+                    'SELECT "id" FROM "itemloading" WHERE "fkitem" = ? AND "monthyear" = ? AND '
+                    '("fkproduct" = ? OR ("fkproduct" IS NULL AND ? IS NULL));',
+                    (item_id, monthyear, product_id, product_id),
+                )
+                existing = cur.fetchone()
+
+                if existing:
+                    db.delete_loading(existing["id"])
+                    deletes += 1
+                continue
 
             # Validate percent range
             if not (0 <= percent <= 100):
                 errors.append(f'Invalid percent {percent}% for item {item_id}, month {monthyear}')
                 continue
 
-            # Upsert the loading value
+            # Upsert the loading value (only for non-zero values)
             db.upsert_loading(item_id, monthyear, percent, product_id)
             updates += 1
 
@@ -183,8 +210,15 @@ def grid_save():
     try:
         db.con.commit()
 
+        # Build success message
+        messages = []
         if updates > 0:
-            flash(f'Successfully saved {updates} loading values.', 'success')
+            messages.append(f'saved {updates} value(s)')
+        if deletes > 0:
+            messages.append(f'deleted {deletes} entry(ies)')
+
+        if messages:
+            flash(f'Successfully {" and ".join(messages)}.', 'success')
         else:
             flash('No changes were made.', 'info')
 
