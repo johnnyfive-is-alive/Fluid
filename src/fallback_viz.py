@@ -1,71 +1,14 @@
 """
-Enhanced fallback visualization generator with 3D effects and animations.
+Enhanced fallback visualization generator with improved item type detection.
 Creates visually engaging D3.js visualizations with depth and motion.
+Handles stations, resources, and other item types equally well.
 """
 
-def generate_fallback_visualization(pivot_data: dict, user_prompt: str = "") -> str:
-    """
-    Generate an enhanced 3D animated D3.js visualization as fallback.
-    Detects data structure and creates appropriate chart type.
-    """
-    numeric_cols = pivot_data.get('numeric_columns', [])
-    categorical_cols = pivot_data.get('categorical_columns', [])
-    data = pivot_data.get('data', [])
 
-    if not data:
-        return """
-d3.select('#chart')
-  .append('div')
-  .attr('class', 'alert alert-warning')
-  .html('<i class="bi bi-exclamation-triangle"></i> No data returned from query');
-"""
-
-    num_cols = len(data[0].keys()) if data else 0
-
-    # Check if this has a monthyear column
-    has_monthyear = any('month' in col.lower() for col in data[0].keys())
-    monthyear_col = None
-    if has_monthyear:
-        for col in categorical_cols:
-            if 'month' in col.lower():
-                monthyear_col = col
-                break
-
-    # Check if this is a simple list query
-    is_list_query = (
-        len(numeric_cols) == 0 and
-        (num_cols <= 4 or
-         'list' in user_prompt.lower() or
-         'show' in user_prompt.lower() or
-         'all' in user_prompt.lower())
-    )
-
-    if is_list_query:
-        return generate_card_list()
-
-    # Time series charts
-    if monthyear_col and len(numeric_cols) >= 1:
-        other_cats = [c for c in categorical_cols if c != monthyear_col]
-        if other_cats and len(numeric_cols) >= 1:
-            return generate_3d_grouped_bar_chart(monthyear_col, other_cats[0], numeric_cols[0])
-        elif len(numeric_cols) >= 1:
-            return generate_3d_line_chart(monthyear_col, numeric_cols[0])
-
-    # Standard charts
-    if len(categorical_cols) >= 1 and len(numeric_cols) >= 1:
-        return generate_3d_bar_chart(categorical_cols[0], numeric_cols[0])
-    elif len(numeric_cols) >= 2:
-        return generate_3d_scatter_plot(numeric_cols[0], numeric_cols[1])
-    elif len(numeric_cols) == 1:
-        return generate_3d_histogram(numeric_cols[0])
-    else:
-        return generate_animated_table()
-
-
-def generate_card_list() -> str:
-    """Generate an animated card-based list view."""
+def generate_enhanced_card_list() -> str:
+    """Generate an animated card-based list view with enhanced animations."""
     return """
-console.log('Rendering card list...');
+console.log('Rendering enhanced card list...');
 const data = window.chartData;
 
 if (!data || data.length === 0) {
@@ -76,13 +19,19 @@ if (!data || data.length === 0) {
   container.html('');
   
   const header = container.append('div')
-    .attr('class', 'card mb-3 shadow-sm')
-    .style('opacity', 0);
+    .attr('class', 'card mb-3 shadow-lg')
+    .style('opacity', 0)
+    .style('transform', 'translateY(-20px)');
   
-  header.transition().duration(500).style('opacity', 1);
+  header.transition()
+    .duration(800)
+    .ease(d3.easeCubicOut)
+    .style('opacity', 1)
+    .style('transform', 'translateY(0)');
   
   header.append('div')
-    .attr('class', 'card-body bg-primary text-white')
+    .attr('class', 'card-body bg-gradient-primary text-white')
+    .style('background', 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
     .append('h4')
     .attr('class', 'mb-0')
     .html('<i class="bi bi-list-ul"></i> Results: ' + data.length + ' item(s)');
@@ -94,25 +43,28 @@ if (!data || data.length === 0) {
     .data(data)
     .join('div')
     .attr('class', 'col')
-    .style('opacity', 0);
+    .style('opacity', 0)
+    .style('transform', 'translateY(30px)');
   
   cards.transition()
-    .duration(600)
-    .delay(function(d, i) { return i * 50; })
-    .style('opacity', 1);
+    .duration(800)
+    .delay(function(d, i) { return 100 + i * 80; })
+    .ease(d3.easeCubicOut)
+    .style('opacity', 1)
+    .style('transform', 'translateY(0)');
   
   const cardElements = cards.append('div')
     .attr('class', 'card h-100 shadow-sm')
     .style('cursor', 'pointer')
-    .style('transition', 'all 0.3s')
+    .style('transition', 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)')
     .on('mouseover', function() {
       d3.select(this)
-        .style('transform', 'translateY(-5px)')
-        .style('box-shadow', '0 8px 16px rgba(0,0,0,0.2)');
+        .style('transform', 'translateY(-8px) scale(1.02)')
+        .style('box-shadow', '0 12px 24px rgba(0,0,0,0.25)');
     })
     .on('mouseout', function() {
       d3.select(this)
-        .style('transform', 'translateY(0)')
+        .style('transform', 'translateY(0) scale(1)')
         .style('box-shadow', null);
     });
   
@@ -123,7 +75,8 @@ if (!data || data.length === 0) {
       if (col.toLowerCase().includes('name') || idx === 0) {
         body.append('h5')
           .attr('class', 'card-title mb-3')
-          .html('<i class="bi bi-tag-fill text-primary"></i> ' + d[col]);
+          .style('color', '#667eea')
+          .html('<i class="bi bi-tag-fill"></i> ' + d[col]);
       } else {
         const fieldDiv = body.append('div').attr('class', 'mb-2');
         fieldDiv.append('strong').attr('class', 'text-muted').text(col + ': ');
@@ -135,12 +88,24 @@ if (!data || data.length === 0) {
 """
 
 
-def generate_3d_grouped_bar_chart(time_col: str, group_col: str, value_col: str) -> str:
-    """Generate a 3D grouped bar chart."""
+def generate_stacked_area_or_grouped_bars(time_col: str, group_col: str, value_col: str,
+                                          resource_name: str = None, user_prompt: str = "") -> str:
+    """
+    Generate a stacked area chart for person/resource allocation across products.
+    Perfect for queries like "Show Pavan usage month to month by product".
+    """
+    title_name = resource_name if resource_name else "Resource"
+
+    # Create the title text in Python to avoid JavaScript string escaping issues
+    if title_name != "Resource":
+        title_text = f"{title_name}'s Time Allocation by Product"
+    else:
+        title_text = "Time Allocation by Product"
+
     return f"""
-console.log('Rendering 3D grouped bar chart...');
-const margin = {{top: 60, right: 140, bottom: 100, left: 80}};
-const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
+console.log('Rendering stacked area chart for resource allocation...');
+const margin = {{top: 80, right: 180, bottom: 100, left: 90}};
+const width = Math.max(900, document.getElementById('chart').clientWidth) - margin.left - margin.right;
 const height = 600 - margin.top - margin.bottom;
 
 const svg = d3.select('#chart')
@@ -153,128 +118,122 @@ const svg = d3.select('#chart')
 
 const data = window.chartData;
 const months = [...new Set(data.map(d => d['{time_col}']))].sort();
-const groups = [...new Set(data.map(d => d['{group_col}']))];
+const products = [...new Set(data.map(d => d['{group_col}']))].sort();
+
+const stackData = months.map(month => {{
+  const obj = {{month: month}};
+  products.forEach(product => {{
+    const record = data.find(d => d['{time_col}'] === month && d['{group_col}'] === product);
+    obj[product] = record ? record['{value_col}'] : 0;
+  }});
+  return obj;
+}});
 
 const colorScale = d3.scaleOrdinal()
-  .domain(groups)
+  .domain(products)
   .range(['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a']);
 
-const x0 = d3.scaleBand()
+const x = d3.scalePoint()
   .domain(months)
   .range([0, width])
   .padding(0.3);
 
-const x1 = d3.scaleBand()
-  .domain(groups)
-  .range([0, x0.bandwidth()])
-  .padding(0.1);
+const maxY = d3.max(stackData, d => d3.sum(products, product => d[product]));
 
 const y = d3.scaleLinear()
-  .domain([0, d3.max(data, d => d['{value_col}'])])
+  .domain([0, maxY || 100])
   .nice()
   .range([height, 0]);
 
 svg.append('g')
   .attr('transform', 'translate(0,' + height + ')')
-  .call(d3.axisBottom(x0))
+  .call(d3.axisBottom(x))
   .selectAll('text')
   .attr('transform', 'rotate(-45)')
   .style('text-anchor', 'end');
 
-svg.append('g').call(d3.axisLeft(y));
+svg.append('g').call(d3.axisLeft(y).tickFormat(d => d + '%'));
 
-const monthGroups = svg.selectAll('.month-group')
-  .data(months)
-  .join('g')
-  .attr('class', 'month-group')
-  .attr('transform', d => 'translate(' + x0(d) + ',0)');
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', height + 75)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '14px')
+  .text('Month');
 
-monthGroups.each(function(month, monthIdx) {{
-  const monthData = data.filter(d => d['{time_col}'] === month);
-  const barGroup = d3.select(this).selectAll('.bar-group')
-    .data(monthData)
-    .join('g')
-    .attr('class', 'bar-group');
-  
-  barGroup.append('rect')
-    .attr('x', d => x1(d['{group_col}']) + 3)
-    .attr('y', height)
-    .attr('width', x1.bandwidth())
-    .attr('height', 0)
-    .attr('fill', d => d3.color(colorScale(d['{group_col}'])).darker(1))
-    .attr('opacity', 0.6)
-    .transition()
-    .duration(1000)
-    .delay(monthIdx * 100)
-    .attr('y', d => y(d['{value_col}']) - 3)
-    .attr('height', d => height - y(d['{value_col}']));
-  
-  barGroup.append('rect')
-    .attr('x', d => x1(d['{group_col}']))
-    .attr('y', height)
-    .attr('width', x1.bandwidth())
-    .attr('height', 0)
-    .attr('fill', d => colorScale(d['{group_col}']))
-    .style('cursor', 'pointer')
-    .transition()
-    .duration(1000)
-    .delay(monthIdx * 100)
-    .attr('y', d => y(d['{value_col}']))
-    .attr('height', d => height - y(d['{value_col}']))
-    .selection()
-    .on('mouseover', function(event, d) {{
-      d3.select(this).attr('opacity', 0.7);
-      svg.append('text')
-        .attr('class', 'tooltip')
-        .attr('x', x0(d['{time_col}']) + x1(d['{group_col}']) + x1.bandwidth() / 2)
-        .attr('y', y(d['{value_col}']) - 10)
-        .attr('text-anchor', 'middle')
-        .style('font-weight', 'bold')
-        .text(d['{group_col}'] + ': ' + d['{value_col}']);
-    }})
-    .on('mouseout', function() {{
-      d3.select(this).attr('opacity', 1);
-      svg.selectAll('.tooltip').remove();
-    }});
+svg.append('text')
+  .attr('transform', 'rotate(-90)')
+  .attr('x', -height / 2)
+  .attr('y', -65)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '14px')
+  .style('font-weight', 'bold')
+  .text('Time Allocation (%)');
+
+const stack = d3.stack()
+  .keys(products);
+
+const series = stack(stackData);
+
+const area = d3.area()
+  .x(d => x(d.data.month))
+  .y0(d => y(d[0]))
+  .y1(d => y(d[1]))
+  .curve(d3.curveMonotoneX);
+
+series.forEach(function(s, idx) {{
+  svg.append('path')
+    .datum(s)
+    .attr('fill', colorScale(s.key))
+    .attr('opacity', 0.7)
+    .attr('d', area)
+    .style('cursor', 'pointer');
 }});
 
 const legend = svg.append('g')
   .attr('transform', 'translate(' + (width + 30) + ', 0)');
 
-groups.forEach(function(group, i) {{
+products.forEach(function(product, i) {{
   const legendRow = legend.append('g')
     .attr('transform', 'translate(0, ' + (i * 30) + ')');
-  
+
   legendRow.append('rect')
     .attr('width', 20)
     .attr('height', 20)
-    .attr('fill', colorScale(group));
-  
+    .attr('fill', colorScale(product));
+
   legendRow.append('text')
     .attr('x', 25)
     .attr('y', 15)
-    .text(group);
+    .text(product);
 }});
+
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', -40)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '20px')
+  .style('font-weight', 'bold')
+  .text("{title_text}");
 
 svg.append('text')
   .attr('x', width / 2)
   .attr('y', -20)
   .attr('text-anchor', 'middle')
-  .style('font-size', '18px')
-  .style('font-weight', 'bold')
-  .text('{value_col} by {group_col} over time');
+  .style('font-size', '14px')
+  .style('fill', '#666')
+  .text('Monthly distribution across products');
 
-console.log('3D grouped bar chart rendered');
+console.log('Stacked area chart rendered');
 """
 
-
-def generate_3d_bar_chart(cat_col: str, num_col: str) -> str:
-    """Generate a 3D bar chart."""
+def generate_multi_line_chart(time_col: str, item_col: str, value_col: str) -> str:
+    """Generate a multi-line chart showing each item as a separate line."""
     return f"""
-console.log('Rendering 3D bar chart...');
-const margin = {{top: 60, right: 40, bottom: 100, left: 80}};
-const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
-const height = 500 - margin.top - margin.bottom;
+console.log('Rendering multi-line chart...');
+const margin = {{top: 80, right: 200, bottom: 100, left: 80}};
+const width = Math.max(800, document.getElementById('chart').clientWidth) - margin.left - margin.right;
+const height = 600 - margin.top - margin.bottom;
 
 const svg = d3.select('#chart')
   .html('')
@@ -285,19 +244,22 @@ const svg = d3.select('#chart')
   .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
 
 const data = window.chartData;
+const itemNames = [...new Set(data.map(d => d['{item_col}']))].sort();
+const months = [...new Set(data.map(d => d['{time_col}']))].sort();
 
-const x = d3.scaleBand()
-  .domain(data.map(d => d['{cat_col}']))
+const colorScale = d3.scaleOrdinal()
+  .domain(itemNames)
+  .range(['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a']);
+
+const x = d3.scalePoint()
+  .domain(months)
   .range([0, width])
-  .padding(0.3);
+  .padding(0.5);
 
 const y = d3.scaleLinear()
-  .domain([0, d3.max(data, d => d['{num_col}'])])
+  .domain([0, d3.max(data, d => d['{value_col}']) || 100])
   .nice()
   .range([height, 0]);
-
-const colorScale = d3.scaleSequential(d3.interpolateViridis)
-  .domain([0, data.length - 1]);
 
 svg.append('g')
   .attr('transform', 'translate(0,' + height + ')')
@@ -308,51 +270,60 @@ svg.append('g')
 
 svg.append('g').call(d3.axisLeft(y));
 
-const barGroups = svg.selectAll('.bar-group')
-  .data(data)
-  .join('g')
-  .attr('class', 'bar-group');
+svg.append('text')
+  .attr('transform', 'rotate(-90)')
+  .attr('x', -height / 2)
+  .attr('y', -60)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '14px')
+  .text('{value_col} (%)');
 
-barGroups.append('rect')
-  .attr('x', d => x(d['{cat_col}']) + 4)
-  .attr('y', height)
-  .attr('width', x.bandwidth())
-  .attr('height', 0)
-  .attr('fill', (d, i) => d3.color(colorScale(i)).darker(1))
-  .attr('opacity', 0.6)
-  .transition()
-  .duration(1200)
-  .delay((d, i) => i * 80)
-  .attr('y', d => y(d['{num_col}']) - 4)
-  .attr('height', d => height - y(d['{num_col}']));
+const line = d3.line()
+  .x(d => x(d['{time_col}']))
+  .y(d => y(d['{value_col}']))
+  .curve(d3.curveMonotoneX);
 
-barGroups.append('rect')
-  .attr('x', d => x(d['{cat_col}']))
-  .attr('y', height)
-  .attr('width', x.bandwidth())
-  .attr('height', 0)
-  .attr('fill', (d, i) => colorScale(i))
-  .style('cursor', 'pointer')
-  .transition()
-  .duration(1200)
-  .delay((d, i) => i * 80)
-  .attr('y', d => y(d['{num_col}']))
-  .attr('height', d => height - y(d['{num_col}']))
-  .selection()
-  .on('mouseover', function(event, d) {{
-    d3.select(this).attr('opacity', 0.7);
-    svg.append('text')
-      .attr('class', 'tooltip')
-      .attr('x', x(d['{cat_col}']) + x.bandwidth() / 2)
-      .attr('y', y(d['{num_col}']) - 10)
-      .attr('text-anchor', 'middle')
-      .style('font-weight', 'bold')
-      .text(d['{cat_col}'] + ': ' + d['{num_col}']);
-  }})
-  .on('mouseout', function() {{
-    d3.select(this).attr('opacity', 1);
-    svg.selectAll('.tooltip').remove();
-  }});
+itemNames.forEach(function(itemName, idx) {{
+  const itemData = data
+    .filter(d => d['{item_col}'] === itemName)
+    .sort((a, b) => a['{time_col}'].localeCompare(b['{time_col}']));
+  
+  if (itemData.length === 0) return;
+  
+  const path = svg.append('path')
+    .datum(itemData)
+    .attr('fill', 'none')
+    .attr('stroke', colorScale(itemName))
+    .attr('stroke-width', 3)
+    .attr('d', line);
+  
+  const totalLength = path.node().getTotalLength();
+  path
+    .attr('stroke-dasharray', totalLength + ' ' + totalLength)
+    .attr('stroke-dashoffset', totalLength)
+    .transition()
+    .duration(2000)
+    .delay(idx * 200)
+    .attr('stroke-dashoffset', 0);
+}});
+
+const legend = svg.append('g')
+  .attr('transform', 'translate(' + (width + 30) + ', 0)');
+
+itemNames.forEach(function(name, i) {{
+  const legendRow = legend.append('g')
+    .attr('transform', 'translate(0, ' + (i * 30) + ')');
+  
+  legendRow.append('rect')
+    .attr('width', 20)
+    .attr('height', 20)
+    .attr('fill', colorScale(name));
+  
+  legendRow.append('text')
+    .attr('x', 25)
+    .attr('y', 15)
+    .text(name);
+}});
 
 svg.append('text')
   .attr('x', width / 2)
@@ -360,16 +331,16 @@ svg.append('text')
   .attr('text-anchor', 'middle')
   .style('font-size', '18px')
   .style('font-weight', 'bold')
-  .text('{cat_col} vs {num_col}');
+  .text('{value_col} by {item_col} over {time_col}');
 
-console.log('3D bar chart rendered');
+console.log('Multi-line chart rendered');
 """
 
 
-def generate_3d_line_chart(time_col: str, value_col: str) -> str:
-    """Generate a 3D line chart."""
+def generate_enhanced_line_chart(time_col: str, value_col: str) -> str:
+    """Generate single line chart with area fill."""
     return f"""
-console.log('Rendering 3D line chart...');
+console.log('Rendering line chart...');
 const margin = {{top: 60, right: 50, bottom: 80, left: 80}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
@@ -382,9 +353,7 @@ const svg = d3.select('#chart')
   .append('g')
   .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
 
-const data = window.chartData.sort((a, b) => 
-  a['{time_col}'].localeCompare(b['{time_col}'])
-);
+const data = window.chartData.sort((a, b) => a['{time_col}'].localeCompare(b['{time_col}']));
 
 const x = d3.scalePoint()
   .domain(data.map(d => d['{time_col}']))
@@ -392,7 +361,7 @@ const x = d3.scalePoint()
   .padding(0.5);
 
 const y = d3.scaleLinear()
-  .domain([0, d3.max(data, d => d['{value_col}'])])
+  .domain([0, d3.max(data, d => d['{value_col}']) || 100])
   .nice()
   .range([height, 0]);
 
@@ -404,18 +373,6 @@ svg.append('g')
   .style('text-anchor', 'end');
 
 svg.append('g').call(d3.axisLeft(y));
-
-const area = d3.area()
-  .x(d => x(d['{time_col}']))
-  .y0(height)
-  .y1(d => y(d['{value_col}']))
-  .curve(d3.curveMonotoneX);
-
-svg.append('path')
-  .datum(data)
-  .attr('fill', 'steelblue')
-  .attr('opacity', 0.3)
-  .attr('d', area);
 
 const line = d3.line()
   .x(d => x(d['{time_col}']))
@@ -437,35 +394,6 @@ path
   .duration(2000)
   .attr('stroke-dashoffset', 0);
 
-svg.selectAll('.point')
-  .data(data)
-  .join('circle')
-  .attr('class', 'point')
-  .attr('cx', d => x(d['{time_col}']))
-  .attr('cy', d => y(d['{value_col}']))
-  .attr('r', 0)
-  .attr('fill', 'steelblue')
-  .style('cursor', 'pointer')
-  .transition()
-  .duration(600)
-  .delay((d, i) => 2000 + i * 100)
-  .attr('r', 5)
-  .selection()
-  .on('mouseover', function(event, d) {{
-    d3.select(this).attr('r', 8);
-    svg.append('text')
-      .attr('class', 'tooltip')
-      .attr('x', x(d['{time_col}']))
-      .attr('y', y(d['{value_col}']) - 15)
-      .attr('text-anchor', 'middle')
-      .style('font-weight', 'bold')
-      .text(d['{time_col}'] + ': ' + d['{value_col}']);
-  }})
-  .on('mouseout', function() {{
-    d3.select(this).attr('r', 5);
-    svg.selectAll('.tooltip').remove();
-  }});
-
 svg.append('text')
   .attr('x', width / 2)
   .attr('y', -20)
@@ -474,14 +402,80 @@ svg.append('text')
   .style('font-weight', 'bold')
   .text('{value_col} over {time_col}');
 
-console.log('3D line chart rendered');
+console.log('Line chart rendered');
 """
 
 
-def generate_3d_scatter_plot(x_col: str, y_col: str) -> str:
-    """Generate a 3D scatter plot."""
+def generate_enhanced_bar_chart(cat_col: str, num_col: str) -> str:
+    """Generate bar chart."""
     return f"""
-console.log('Rendering 3D scatter plot...');
+console.log('Rendering bar chart...');
+const margin = {{top: 60, right: 40, bottom: 100, left: 80}};
+const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
+const height = 500 - margin.top - margin.bottom;
+
+const svg = d3.select('#chart')
+  .html('')
+  .append('svg')
+  .attr('width', width + margin.left + margin.right)
+  .attr('height', height + margin.top + margin.bottom)
+  .append('g')
+  .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+const data = window.chartData;
+
+const x = d3.scaleBand()
+  .domain(data.map(d => d['{cat_col}']))
+  .range([0, width])
+  .padding(0.3);
+
+const y = d3.scaleLinear()
+  .domain([0, d3.max(data, d => d['{num_col}']) || 100])
+  .nice()
+  .range([height, 0]);
+
+const colorScale = d3.scaleSequential(d3.interpolateViridis)
+  .domain([0, data.length - 1]);
+
+svg.append('g')
+  .attr('transform', 'translate(0,' + height + ')')
+  .call(d3.axisBottom(x))
+  .selectAll('text')
+  .attr('transform', 'rotate(-45)')
+  .style('text-anchor', 'end');
+
+svg.append('g').call(d3.axisLeft(y));
+
+svg.selectAll('.bar')
+  .data(data)
+  .join('rect')
+  .attr('x', d => x(d['{cat_col}']))
+  .attr('y', height)
+  .attr('width', x.bandwidth())
+  .attr('height', 0)
+  .attr('fill', (d, i) => colorScale(i))
+  .transition()
+  .duration(1200)
+  .delay((d, i) => i * 80)
+  .attr('y', d => y(d['{num_col}']))
+  .attr('height', d => height - y(d['{num_col}']));
+
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', -20)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '18px')
+  .style('font-weight', 'bold')
+  .text('{cat_col} vs {num_col}');
+
+console.log('Bar chart rendered');
+"""
+
+
+def generate_enhanced_scatter_plot(x_col: str, y_col: str) -> str:
+    """Generate scatter plot."""
+    return f"""
+console.log('Rendering scatter plot...');
 const margin = {{top: 60, right: 50, bottom: 80, left: 80}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
@@ -506,9 +500,6 @@ const y = d3.scaleLinear()
   .nice()
   .range([height, 0]);
 
-const colorScale = d3.scaleSequential(d3.interpolateRainbow)
-  .domain([0, data.length - 1]);
-
 svg.append('g')
   .attr('transform', 'translate(0,' + height + ')')
   .call(d3.axisBottom(x));
@@ -518,32 +509,15 @@ svg.append('g').call(d3.axisLeft(y));
 svg.selectAll('.point')
   .data(data)
   .join('circle')
-  .attr('class', 'point')
   .attr('cx', d => x(d['{x_col}']))
   .attr('cy', d => y(d['{y_col}']))
   .attr('r', 0)
-  .attr('fill', (d, i) => colorScale(i))
+  .attr('fill', 'steelblue')
   .attr('opacity', 0.7)
-  .style('cursor', 'pointer')
   .transition()
   .duration(1000)
   .delay((d, i) => i * 50)
-  .attr('r', 8)
-  .selection()
-  .on('mouseover', function(event, d) {{
-    d3.select(this).attr('r', 12).attr('opacity', 1);
-    svg.append('text')
-      .attr('class', 'tooltip')
-      .attr('x', x(d['{x_col}']))
-      .attr('y', y(d['{y_col}']) - 15)
-      .attr('text-anchor', 'middle')
-      .style('font-weight', 'bold')
-      .text('(' + d['{x_col}'] + ', ' + d['{y_col}'] + ')');
-  }})
-  .on('mouseout', function() {{
-    d3.select(this).attr('r', 8).attr('opacity', 0.7);
-    svg.selectAll('.tooltip').remove();
-  }});
+  .attr('r', 8);
 
 svg.append('text')
   .attr('x', width / 2)
@@ -553,14 +527,14 @@ svg.append('text')
   .style('font-weight', 'bold')
   .text('{x_col} vs {y_col}');
 
-console.log('3D scatter plot rendered');
+console.log('Scatter plot rendered');
 """
 
 
-def generate_3d_histogram(num_col: str) -> str:
-    """Generate a 3D histogram."""
+def generate_enhanced_histogram(num_col: str) -> str:
+    """Generate histogram."""
     return f"""
-console.log('Rendering 3D histogram...');
+console.log('Rendering histogram...');
 const margin = {{top: 60, right: 50, bottom: 80, left: 80}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
@@ -591,9 +565,6 @@ const y = d3.scaleLinear()
   .nice()
   .range([height, 0]);
 
-const colorScale = d3.scaleSequential(d3.interpolateWarm)
-  .domain([0, bins.length - 1]);
-
 svg.append('g')
   .attr('transform', 'translate(0,' + height + ')')
   .call(d3.axisBottom(x));
@@ -603,33 +574,16 @@ svg.append('g').call(d3.axisLeft(y));
 svg.selectAll('.bar')
   .data(bins)
   .join('rect')
-  .attr('class', 'bar')
   .attr('x', d => x(d.x0))
   .attr('y', height)
   .attr('width', d => x(d.x1) - x(d.x0) - 1)
   .attr('height', 0)
-  .attr('fill', (d, i) => colorScale(i))
-  .style('cursor', 'pointer')
+  .attr('fill', 'steelblue')
   .transition()
   .duration(1200)
   .delay((d, i) => i * 60)
   .attr('y', d => y(d.length))
-  .attr('height', d => height - y(d.length))
-  .selection()
-  .on('mouseover', function(event, d) {{
-    d3.select(this).attr('opacity', 0.7);
-    svg.append('text')
-      .attr('class', 'tooltip')
-      .attr('x', x(d.x0) + (x(d.x1) - x(d.x0)) / 2)
-      .attr('y', y(d.length) - 10)
-      .attr('text-anchor', 'middle')
-      .style('font-weight', 'bold')
-      .text('Count: ' + d.length);
-  }})
-  .on('mouseout', function() {{
-    d3.select(this).attr('opacity', 1);
-    svg.selectAll('.tooltip').remove();
-  }});
+  .attr('height', d => height - y(d.length));
 
 svg.append('text')
   .attr('x', width / 2)
@@ -639,85 +593,137 @@ svg.append('text')
   .style('font-weight', 'bold')
   .text('Distribution of {num_col}');
 
-console.log('3D histogram rendered');
+console.log('Histogram rendered');
 """
 
 
-def generate_animated_table() -> str:
-    """Generate an animated table."""
+def generate_enhanced_table() -> str:
+    """Generate table."""
     return """
-console.log('Rendering animated table...');
+console.log('Rendering table...');
 const data = window.chartData;
 
 if (!data || data.length === 0) {
-  d3.select('#chart').html('<div class="alert alert-warning">No data to display</div>');
+  d3.select('#chart').html('<div class="alert alert-warning">No data</div>');
 } else {
   const columns = Object.keys(data[0]);
   const container = d3.select('#chart');
   container.html('');
   
-  const card = container.append('div').attr('class', 'card shadow-sm');
-  
+  const card = container.append('div').attr('class', 'card');
   card.append('div')
     .attr('class', 'card-header bg-primary text-white')
-    .html('<h5 class="mb-0"><i class="bi bi-table"></i> Query Results (' + data.length + ' rows)</h5>');
+    .html('<h5>Results (' + data.length + ' rows)</h5>');
   
-  const tableContainer = card.append('div')
+  const table = card.append('div')
     .attr('class', 'card-body p-0')
-    .append('div')
-    .attr('class', 'table-responsive')
-    .style('max-height', '600px');
+    .append('table')
+    .attr('class', 'table table-sm');
   
-  const table = tableContainer.append('table')
-    .attr('class', 'table table-hover table-sm mb-0');
-  
-  const thead = table.append('thead')
-    .attr('class', 'table-dark')
-    .style('position', 'sticky')
-    .style('top', '0');
-  
-  const headerRow = thead.append('tr');
-  headerRow.append('th').attr('class', 'text-center').text('#');
-  
-  headerRow.selectAll('th.data-col')
-    .data(columns)
+  const thead = table.append('thead').attr('class', 'table-dark');
+  thead.append('tr')
+    .selectAll('th')
+    .data(['#'].concat(columns))
     .join('th')
-    .attr('class', 'data-col')
     .text(d => d);
   
   const tbody = table.append('tbody');
-  
-  const rows = tbody.selectAll('tr')
+  tbody.selectAll('tr')
     .data(data)
     .join('tr')
-    .style('cursor', 'pointer')
-    .on('mouseover', function() {
-      d3.select(this).style('background-color', '#f0f0f0');
-    })
-    .on('mouseout', function() {
-      d3.select(this).style('background-color', null);
-    });
-  
-  rows.append('td')
-    .attr('class', 'text-center')
-    .html((d, i) => '<span class="badge bg-primary">' + (i + 1) + '</span>');
-  
-  rows.selectAll('td.data-cell')
-    .data(d => columns.map(col => ({col: col, value: d[col]})))
+    .selectAll('td')
+    .data((d, i) => [i + 1].concat(columns.map(col => d[col])))
     .join('td')
-    .attr('class', 'data-cell')
-    .html(d => {
-      if (d.value === null || d.value === undefined) {
-        return '<span class="text-muted">null</span>';
-      }
-      if (d.col.toLowerCase().includes('name')) {
-        return '<strong>' + d.value + '</strong>';
-      }
-      return d.value;
-    });
-  
-  card.append('div')
-    .attr('class', 'card-footer text-muted')
-    .html('<small>Showing ' + data.length + ' rows × ' + columns.length + ' columns</small>');
+    .text(d => d);
 }
 """
+
+
+def generate_fallback_visualization(pivot_data: dict, user_prompt: str = "") -> str:
+    """
+    Generate an enhanced animated D3.js visualization as fallback.
+    Detects data structure and creates appropriate chart type.
+    """
+    numeric_cols = pivot_data.get('numeric_columns', [])
+    categorical_cols = pivot_data.get('categorical_columns', [])
+    data = pivot_data.get('data', [])
+
+    if not data:
+        return """
+d3.select('#chart')
+  .append('div')
+  .attr('class', 'alert alert-warning')
+  .html('<i class="bi bi-exclamation-triangle"></i> No data returned from query');
+"""
+
+    # Enhanced detection logic
+    monthyear_col = None
+    for col in categorical_cols:
+        if 'month' in col.lower() or col.lower() in ['monthyear', 'month_year', 'yearmonth']:
+            monthyear_col = col
+            break
+
+    item_col = None
+    for col in categorical_cols:
+        if 'itemname' in col.lower() or col.lower() in ['item', 'name', 'station', 'resource']:
+            item_col = col
+            break
+
+    group_col = None
+    for col in categorical_cols:
+        if col.lower() in ['product', 'productname', 'group', 'category'] and col != monthyear_col:
+            group_col = col
+            break
+
+    # Extract person name from query
+    resource_name = None
+    if 'usage' in user_prompt.lower() or 'loading' in user_prompt.lower():
+        words = user_prompt.split()
+        for i, word in enumerate(words):
+            if word.lower() in ['usage', 'loading', 'capacity', 'utilization', 'time']:
+                if i > 0:
+                    resource_name = words[i-1].strip(',')
+                    break
+
+    # Check if list query
+    is_list_query = (
+        len(numeric_cols) == 0 and
+        ('list' in user_prompt.lower() or 'show all' in user_prompt.lower())
+    )
+
+    if is_list_query:
+        return generate_enhanced_card_list()
+
+    # PRIORITY 1: Time series with product breakdown
+    if monthyear_col and group_col and len(numeric_cols) >= 1:
+        return generate_stacked_area_or_grouped_bars(
+            monthyear_col, group_col, numeric_cols[0],
+            resource_name=resource_name, user_prompt=user_prompt
+        )
+
+    # PRIORITY 2: Time series with item breakdown
+    if monthyear_col and item_col and len(numeric_cols) >= 1:
+        return generate_multi_line_chart(monthyear_col, item_col, numeric_cols[0])
+
+    # PRIORITY 3: Simple time series
+    if monthyear_col and len(numeric_cols) >= 1:
+        return generate_enhanced_line_chart(monthyear_col, numeric_cols[0])
+
+    # PRIORITY 4: Item comparison
+    if item_col and len(numeric_cols) >= 1:
+        return generate_enhanced_bar_chart(item_col, numeric_cols[0])
+
+    # PRIORITY 5: Standard categorical vs numeric
+    if len(categorical_cols) >= 1 and len(numeric_cols) >= 1:
+        return generate_enhanced_bar_chart(categorical_cols[0], numeric_cols[0])
+
+    # PRIORITY 6: Scatter plot
+    if len(numeric_cols) >= 2:
+        return generate_enhanced_scatter_plot(numeric_cols[0], numeric_cols[1])
+
+    # PRIORITY 7: Histogram
+    if len(numeric_cols) == 1:
+        return generate_enhanced_histogram(numeric_cols[0])
+
+    # FALLBACK: Table
+    return generate_enhanced_table()

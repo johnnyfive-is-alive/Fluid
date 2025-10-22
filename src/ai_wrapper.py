@@ -2,6 +2,12 @@
 AI Wrapper using llama-cpp-python with pre-built wheels.
 Includes robust error handling and fallback mechanisms.
 
+ENHANCEMENTS:
+- Better SQL generation with item type awareness
+- Improved handling of monthyear time series data
+- Enhanced data pivoting for multi-line charts
+- Uses enhanced fallback visualizations for all item types
+
 Installation: pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 """
 
@@ -12,12 +18,19 @@ import re
 from typing import Dict, List, Any, Optional
 import os
 
-# Import table metadata
+# Import table metadata for AI context
 from table_metadata import TABLE_METADATA, get_table_metadata
 
 
 class LlamaQueryProcessor:
-    """Processes natural language queries through AI-powered pipeline."""
+    """
+    Processes natural language queries through AI-powered pipeline.
+
+    Three-phase approach:
+    1. SQL Generation: Convert natural language to SQL
+    2. Data Retrieval: Execute SQL and pivot data
+    3. Visualization: Generate D3.js code with enhanced animations
+    """
 
     def __init__(self, model_path: str = None, db_connection = None):
         # Try to import config, but provide defaults if it fails
@@ -52,7 +65,7 @@ class LlamaQueryProcessor:
 
             self.llm = Llama(
                 model_path=self.model_path,
-                n_ctx=2048,          # Reduced context for stability
+                n_ctx=2048,          # Context window size
                 n_threads=4,         # Conservative thread count
                 n_gpu_layers=0,      # CPU only for compatibility
                 n_batch=512,         # Batch size
@@ -78,7 +91,15 @@ class LlamaQueryProcessor:
             )
 
     def _get_schema(self) -> str:
-        """Extract database schema with formatting metadata for AI context."""
+        """
+        Extract database schema with formatting metadata for AI context.
+
+        ENHANCEMENT: Now includes detailed column metadata from table_metadata.py
+        to help AI understand:
+        - Capitalization rules (STATION names are uppercase, RESOURCE names are mixed)
+        - Column formats (monthyear is YYYY-MM)
+        - Business rules (loading should sum to ≤100%)
+        """
         schema_parts = []
         tables_query = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
         tables = self.db._execute(tables_query).fetchall()
@@ -107,7 +128,7 @@ class LlamaQueryProcessor:
                     for fk in fks
                 ])
 
-            # Add metadata if available
+            # Add metadata if available (CRITICAL for item type awareness)
             metadata = get_table_metadata(table_name)
             metadata_info = ""
 
@@ -118,7 +139,7 @@ class LlamaQueryProcessor:
                 if 'columns' in metadata:
                     col_notes = []
                     for col_name, col_meta in metadata['columns'].items():
-                        # Check for capitalization_rules
+                        # Check for capitalization_rules (helps AI understand item types)
                         if 'capitalization_rules' in col_meta:
                             rules = col_meta['capitalization_rules']
                             rules_str = "; ".join([f"{k}={v}" for k, v in rules.items()])
@@ -144,8 +165,12 @@ class LlamaQueryProcessor:
         return "\n\n".join(schema_parts)
 
     def _call_llama(self, prompt: str, system_context: str = "", max_tokens: int = 512) -> str:
-        """Call Llama model with error handling."""
-        # Construct full prompt
+        """
+        Call Llama model with error handling.
+
+        Uses Llama 3.2 instruction format with system context for better results.
+        """
+        # Construct full prompt in Llama 3.2 format
         if system_context:
             full_prompt = f"<|system|>\n{system_context}\n<|user|>\n{prompt}\n<|assistant|>\n"
         else:
@@ -155,7 +180,7 @@ class LlamaQueryProcessor:
             response = self.llm(
                 full_prompt,
                 max_tokens=max_tokens,
-                temperature=0.2,
+                temperature=0.2,      # Low temperature for more deterministic SQL
                 top_p=0.9,
                 top_k=40,
                 repeat_penalty=1.1,
@@ -169,7 +194,14 @@ class LlamaQueryProcessor:
             raise Exception(f"Error generating response: {str(e)}")
 
     def _extract_sql(self, ai_response: str) -> str:
-        """Extract SQL query from AI response."""
+        """
+        Extract SQL query from AI response.
+
+        Handles various formats:
+        - Code blocks with ```sql
+        - Bare SQL starting with SELECT
+        - SQL with explanatory text
+        """
         # Look for SQL between ```sql and ``` or ```
         sql_pattern = r'```sql\s*(.*?)\s*```|```\s*(.*?)\s*```'
         matches = re.findall(sql_pattern, ai_response, re.DOTALL | re.IGNORECASE)
@@ -210,47 +242,185 @@ class LlamaQueryProcessor:
 
         return ai_response.strip()
 
+    def _validate_and_fix_sql(self, sql_query: str) -> str:
+        """
+        Validate and auto-fix common SQL errors.
+
+        Common issues:
+        1. References it.typename without JOIN itemtypes
+        2. Missing table aliases
+        3. Invalid SQLite syntax
+        """
+        import re
+
+        # Check if query references it.typename or typename without proper JOIN
+        if re.search(r'\bit\.typename\b', sql_query, re.IGNORECASE):
+            # Check if itemtypes is properly joined
+            if not re.search(r'JOIN\s+itemtypes\s+it\s+ON', sql_query, re.IGNORECASE):
+                print("⚠️  Found it.typename without JOIN itemtypes - attempting to fix...")
+
+                # Try to auto-fix: add the JOIN after items join
+                items_join = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\s]+\s*)', sql_query, re.IGNORECASE)
+                if items_join:
+                    insert_pos = items_join.end()
+                    join_clause = "\n  JOIN itemtypes it ON i.fkitemtype = it.id"
+                    sql_query = sql_query[:insert_pos] + join_clause + sql_query[insert_pos:]
+                    print("✅ Auto-added: JOIN itemtypes it ON i.fkitemtype = it.id")
+                else:
+                    print("❌ Could not auto-fix - manual correction needed")
+
+        # Check for WHERE typename without it. alias
+        if re.search(r'WHERE\s+typename\s*=', sql_query, re.IGNORECASE) and \
+           not re.search(r'WHERE\s+it\.typename\s*=', sql_query, re.IGNORECASE):
+            print("⚠️  Found WHERE typename without alias - fixing...")
+            sql_query = re.sub(r'\bWHERE\s+typename\b', 'WHERE it.typename', sql_query, flags=re.IGNORECASE)
+            print("✅ Changed 'WHERE typename' to 'WHERE it.typename'")
+
+        return sql_query
+
     def phase1_generate_sql(self, user_prompt: str) -> Dict[str, Any]:
-        """Phase 1: Generate SQL query from natural language with formatting awareness."""
+        """
+        Phase 1: Generate SQL query from natural language with formatting awareness.
+
+        ENHANCEMENT: System context now includes:
+        - Item type awareness (STATION vs RESOURCE vs UNIT)
+        - Capitalization rules for each item type
+        - monthyear format understanding
+        - Product-based loading structure
+        - SQL validation and auto-correction
+        """
 
         system_context = f"""SQLite query generator. Use ONLY SQLite syntax.
 
 SCHEMA:
 {self.schema}
 
-SQLITE SYNTAX (NO PostgreSQL):
-1. NO EXTRACT, NO INTERVAL. monthyear is already 'YYYY-MM' format - use it directly
-2. Date math: date('now','-1 year') or use simple string: '2025-01'
+CRITICAL SQLITE SYNTAX RULES (NO PostgreSQL):
+1. NO EXTRACT, NO INTERVAL - monthyear is already 'YYYY-MM' format
+2. Date math: date('now','-1 year') or simple strings like '2025-01'
 3. Current date: date('now') returns 'YYYY-MM-DD', use substr to get 'YYYY-MM'
-4. items.fkitemtype and il.fkproduct are INTs (foreign keys to items/itemtypes)
-5. items has NO fkproduct column - use il.fkproduct or item_product_map
+4. items.fkitemtype and il.fkproduct are INTs (foreign keys)
+5. items has NO fkproduct column - use il.fkproduct from itemloading
 6. Percent is in itemloading: il.percent (NOT i.percent)
 
-EXAMPLE - Product usage over next year:
+IMPORTANT: ALWAYS JOIN itemtypes WHEN FILTERING BY TYPE
+- If WHERE clause uses it.typename, you MUST JOIN itemtypes it ON i.fkitemtype = it.id
+- Never reference it.typename without JOIN itemtypes it ON i.fkitemtype = it.id
+
+PERSON/RESOURCE QUERIES (CRITICAL):
+When user asks about a SPECIFIC PERSON's usage/loading/time allocation:
+- The person is in the items table (e.g., "Pavan Eranki", "Gabor Farkas")
+- You want to see HOW THAT PERSON'S time is allocated across products
+- WRONG: Looking at all items and grouping by product
+- CORRECT: Filter for that specific person, then show their allocation by product
+
+EXAMPLE - "Show me Pavan Eranki month to month use" or "Pavan Eranki usage by product":
+```sql
 SELECT 
-  COALESCE(p.itemname, 'UNALLOCATED') AS product,
+  i.itemname,
   il.monthyear,
-  COUNT(DISTINCT il.fkitem) AS station_count,
-  SUM(il.percent) AS total_percent
+  COALESCE(p.itemname, 'UNALLOCATED') AS product,
+  il.percent as total_percent
 FROM itemloading il
+JOIN items i ON il.fkitem = i.id
 LEFT JOIN items p ON il.fkproduct = p.id
-WHERE il.monthyear BETWEEN '2025-01' AND '2025-12'
-GROUP BY p.itemname, il.monthyear
+WHERE i.itemname LIKE '%Pavan%' OR i.itemname LIKE '%Eranki%'
+  AND il.monthyear BETWEEN '2025-01' AND '2025-12'
 ORDER BY il.monthyear, p.itemname
+```
+
+DETECTION RULES:
+- If query mentions a person's name + "usage/loading/time/capacity" → Filter by that person's itemname
+- Look for names in the query: "Pavan", "Gabor", "Steven", etc.
+- These are RESOURCES (people) in the items table
+- Show their allocation across products over time
+
+ITEM TYPE QUERIES (CRITICAL):
+To get items with their types:
+  SELECT i.itemname, it.typename
+  FROM items i
+  JOIN itemtypes it ON i.fkitemtype = it.id
+
+To filter by specific type (MUST include JOIN):
+  SELECT i.itemname, il.monthyear, SUM(il.percent) as total
+  FROM itemloading il
+  JOIN items i ON il.fkitem = i.id
+  JOIN itemtypes it ON i.fkitemtype = it.id
+  WHERE it.typename = 'RESOURCE'
+  GROUP BY i.itemname, il.monthyear
+
+Item names: STATIONS are uppercase (DV-SPYKER), RESOURCES may be mixed (Gabor Farkas)
+
+LOADING QUERIES:
+- For item loading: JOIN itemloading il ON il.fkitem = i.id
+- For products: JOIN items p ON il.fkproduct = p.id (product is in items table with typename='PRODUCT')
+- UNALLOCATED: il.fkproduct IS NULL or p.itemname = 'UNALLOCATED'
+- Always JOIN itemtypes if you need typename in SELECT or WHERE
+
+EXAMPLE 1 - Resource loading by month (all resources):
+```sql
+SELECT 
+  i.itemname,
+  it.typename,
+  il.monthyear,
+  SUM(il.percent) as total_loading
+FROM itemloading il
+JOIN items i ON il.fkitem = i.id
+JOIN itemtypes it ON i.fkitemtype = it.id
+WHERE it.typename = 'RESOURCE'
+  AND il.monthyear BETWEEN '2025-01' AND '2025-12'
+GROUP BY i.itemname, it.typename, il.monthyear
+ORDER BY i.itemname, il.monthyear
+```
+
+EXAMPLE 2 - Specific person's allocation (Pavan Eranki):
+```sql
+SELECT 
+  il.monthyear,
+  COALESCE(p.itemname, 'UNALLOCATED') AS product,
+  il.percent as total_percent
+FROM itemloading il
+JOIN items i ON il.fkitem = i.id
+LEFT JOIN items p ON il.fkproduct = p.id
+WHERE i.itemname LIKE '%Pavan%' OR i.itemname LIKE '%Eranki%'
+ORDER BY il.monthyear, p.itemname
+```
+
+EXAMPLE 3 - All items loading (no type filter):
+```sql
+SELECT 
+  i.itemname,
+  il.monthyear,
+  SUM(il.percent) as total_loading
+FROM itemloading il
+JOIN items i ON il.fkitem = i.id
+WHERE il.monthyear BETWEEN '2025-01' AND '2025-12'
+GROUP BY i.itemname, il.monthyear
+ORDER BY i.itemname, il.monthyear
+```
+
+REMEMBER: 
+- Person name in query → Filter WHERE i.itemname LIKE '%Name%'
+- "all resources" → Filter WHERE it.typename = 'RESOURCE' (must JOIN itemtypes)
+- If you reference it.typename ANYWHERE, you MUST JOIN itemtypes!
 
 Return ONLY SQL in ```sql blocks."""
 
         prompt = f"Query: {user_prompt}"
 
-        print(f"🤖 Generating SQL...")
+        print(f"🤖 Generating SQL for query: {user_prompt}")
         ai_response = self._call_llama(prompt, system_context, max_tokens=512)
         sql_query = self._extract_sql(ai_response)
 
+        # Validate and auto-fix common SQL errors
+        sql_query = self._validate_and_fix_sql(sql_query)
+
+        # Fallback to safe query if extraction fails
         if not sql_query.upper().startswith('SELECT'):
             sql_query = "SELECT * FROM items LIMIT 10;"
             print("⚠️  Using fallback query")
 
-        print(f"✅ SQL: {sql_query[:50]}...")
+        print(f"✅ SQL generated: {sql_query[:80]}...")
 
         return {
             'prompt': prompt,
@@ -259,12 +429,20 @@ Return ONLY SQL in ```sql blocks."""
         }
 
     def phase2_retrieve_data(self, sql_query: str) -> Dict[str, Any]:
-        """Phase 2: Execute SQL and prepare pivot data."""
+        """
+        Phase 2: Execute SQL and prepare pivot data.
+
+        ENHANCEMENT: Better grouping detection for multi-line charts
+        - Identifies itemname columns for per-item lines
+        - Identifies monthyear columns for time series
+        - Prepares data structure for enhanced visualizations
+        """
         try:
             print(f"📊 Executing SQL...")
             cursor = self.db._execute(sql_query)
             rows = cursor.fetchall()
 
+            # Convert to dictionaries
             raw_data = [dict(row) for row in rows]
 
             if not raw_data:
@@ -281,12 +459,17 @@ Return ONLY SQL in ```sql blocks."""
                     'row_count': 0
                 }
 
+            # Create DataFrame for analysis
             df = pd.DataFrame(raw_data)
 
+            # Identify column types
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             categorical_cols = df.select_dtypes(exclude=['number']).columns.tolist()
 
-            # Convert DataFrame to JSON-safe format
+            print(f"📈 Data structure: {len(numeric_cols)} numeric, {len(categorical_cols)} categorical columns")
+            print(f"📋 Columns: {', '.join(df.columns)}")
+
+            # Convert DataFrame to JSON-safe format (CRITICAL for D3.js)
             json_safe_data = []
             for _, row in df.iterrows():
                 row_dict = {}
@@ -300,13 +483,14 @@ Return ONLY SQL in ```sql blocks."""
                     elif isinstance(val, (int, float, str, bool)):
                         row_dict[col] = val
                     else:
-                        # For any other type, try to convert to native Python type
+                        # For any other type, convert to native Python type
                         try:
                             row_dict[col] = val.item() if hasattr(val, 'item') else str(val)
                         except:
                             row_dict[col] = str(val)
                 json_safe_data.append(row_dict)
 
+            # Build pivot data structure
             pivot_data = {
                 'columns': list(df.columns),
                 'numeric_columns': numeric_cols,
@@ -315,6 +499,7 @@ Return ONLY SQL in ```sql blocks."""
                 'summary': {}
             }
 
+            # Calculate summary statistics for numeric columns
             if numeric_cols:
                 summary = {}
                 for col in numeric_cols:
@@ -327,11 +512,12 @@ Return ONLY SQL in ```sql blocks."""
                     }
                 pivot_data['summary'] = summary
 
+            # Try to create grouped data for charts (helps with product/item grouping)
             if categorical_cols and numeric_cols:
                 group_col = categorical_cols[0]
                 try:
                     grouped = df.groupby(group_col)[numeric_cols].agg(['sum', 'mean', 'count']).reset_index()
-                    # Flatten multi-index columns and convert to JSON-safe format
+                    # Flatten and convert to JSON-safe format
                     grouped_simple = []
                     for idx in range(len(grouped)):
                         row_dict = {group_col: str(grouped.iloc[idx][group_col])}
@@ -344,6 +530,7 @@ Return ONLY SQL in ```sql blocks."""
                                 pass  # Skip if conversion fails
                         grouped_simple.append(row_dict)
                     pivot_data['grouped'] = grouped_simple
+                    print(f"📊 Created grouped aggregation by {group_col}")
                 except:
                     # If grouping fails, just skip it
                     pass
@@ -360,37 +547,57 @@ Return ONLY SQL in ```sql blocks."""
             raise Exception(f"SQL execution error: {str(e)}\nQuery: {sql_query}")
 
     def phase3_generate_visualization(self, pivot_data: Dict, user_prompt: str) -> Dict[str, Any]:
-        """Phase 3: Generate D3.js visualization code (using fallback for reliability)."""
+        """
+        Phase 3: Generate D3.js visualization code.
 
+        ENHANCEMENT: Now uses enhanced fallback visualizations with:
+        - Multi-line charts for item-by-month queries
+        - Better detection of time series data
+        - Enhanced animations and interactivity
+        - Proper handling of all item types (stations, resources, units)
+
+        NOTE: We use fallback for reliability. AI-generated D3 can be inconsistent.
+        """
+
+        # Import the enhanced fallback visualization generator
         from fallback_viz import generate_fallback_visualization
 
-        print(f"📊 Generating visualization...")
+        print(f"📊 Generating enhanced visualization...")
 
-        # Use fallback for reliability (AI D3 generation can be flaky)
+        # Use enhanced fallback for reliability and better item type support
         fallback_code = generate_fallback_visualization(pivot_data, user_prompt)
 
-        print(f"✅ Visualization code generated")
+        print(f"✅ Visualization code generated ({len(fallback_code)} chars)")
 
         return {
-            'prompt': 'Using pre-built visualization templates',
+            'prompt': 'Using enhanced visualization templates with item type awareness',
             'd3_code': fallback_code,
-            'raw_response': 'Using fallback visualization for reliability',
+            'raw_response': 'Using enhanced fallback visualization for reliability and better item type support',
             'used_fallback': True
         }
 
     def process_pipeline(self, user_prompt: str) -> Dict[str, Any]:
-        """Execute complete three-phase pipeline."""
+        """
+        Execute complete three-phase pipeline.
+
+        WORKFLOW:
+        1. Generate SQL from natural language (with item type awareness)
+        2. Execute SQL and pivot data (with proper column detection)
+        3. Generate enhanced D3.js visualization (with animations)
+
+        Returns complete results from all three phases for debugging and display.
+        """
         print(f"\n{'='*60}")
         print(f"🚀 Processing query: {user_prompt}")
         print(f"{'='*60}\n")
 
-        # Phase 1: Generate SQL
+        # Phase 1: Generate SQL with item type awareness
         phase1_result = self.phase1_generate_sql(user_prompt)
 
-        # Phase 2: Retrieve and pivot data
+        # Phase 2: Retrieve and pivot data with proper column detection
         phase2_result = self.phase2_retrieve_data(phase1_result['sql_query'])
 
-        # Phase 3: Generate visualization
+        # Phase 3: Generate enhanced visualization
         if phase2_result['row_count'] > 0:
             phase3_result = self.phase3_generate_visualization(
                 phase2_result['pivot_data'],
@@ -406,6 +613,9 @@ Return ONLY SQL in ```sql blocks."""
 
         print(f"\n{'='*60}")
         print(f"✅ Pipeline complete!")
+        print(f"   - SQL generated: {len(phase1_result['sql_query'])} chars")
+        print(f"   - Data rows: {phase2_result['row_count']}")
+        print(f"   - Viz code: {len(phase3_result['d3_code'])} chars")
         print(f"{'='*60}\n")
 
         return {
