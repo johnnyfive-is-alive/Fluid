@@ -3,6 +3,39 @@ Enhanced fallback visualization generator with improved item type detection.
 Creates visually engaging D3.js visualizations with depth and motion.
 Handles stations, resources, and other item types equally well.
 """
+import re
+
+
+def extract_resource_name(user_prompt: str) -> str:
+    """
+    Extract resource/person name from query in any language.
+    Uses capitalized name patterns (e.g., "Pavan", "Gabor Farkas").
+
+    This is language-independent and works for English, Thai, or any other language
+    as long as the person's name is capitalized.
+
+    Args:
+        user_prompt: The user's query in any language
+
+    Returns:
+        The extracted name, or None if no name found
+    """
+    # Pattern: Look for capitalized words (likely names)
+    # Matches: "Pavan", "Pavan Eranki", "Gabor Farkas"
+    name_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b'
+    matches = re.findall(name_pattern, user_prompt)
+
+    if matches:
+        # Filter out common English words that might be capitalized
+        common_words = {'Show', 'Give', 'Display', 'Usage', 'Loading', 'Month',
+                        'Year', 'Next', 'Time', 'For', 'The', 'Allocation',
+                        'Capacity', 'Utilization', 'By', 'Product', 'Station',
+                        'Resource', 'All', 'List', 'Get', 'Find', 'Search'}
+        names = [m for m in matches if m not in common_words]
+        if names:
+            return names[0]  # Return first name found
+
+    return None
 
 
 def generate_enhanced_card_list() -> str:
@@ -104,6 +137,10 @@ def generate_stacked_area_or_grouped_bars(time_col: str, group_col: str, value_c
     # If it's a station query, generate grouped bars instead
     if is_station_query:
         return generate_grouped_bar_chart(time_col, group_col, value_col, user_prompt)
+
+    # UPDATED: Use the new extraction function if resource_name not provided
+    if not resource_name:
+        resource_name = extract_resource_name(user_prompt)
 
     title_name = resource_name if resource_name else "Resource"
 
@@ -237,6 +274,7 @@ svg.append('text')
 
 console.log('Stacked area chart rendered');
 """
+
 
 def generate_grouped_bar_chart(time_col: str, group_col: str, value_col: str, user_prompt: str = "") -> str:
     """
@@ -394,6 +432,7 @@ svg.append('text')
 console.log('Grouped bar chart rendered');
 """
 
+
 def generate_multi_line_chart(time_col: str, item_col: str, value_col: str) -> str:
     """Generate a multi-line chart showing each item as a separate line."""
     return f"""
@@ -438,74 +477,85 @@ svg.append('g')
 svg.append('g').call(d3.axisLeft(y));
 
 svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', height + 75)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '14px')
+  .text('Month');
+
+svg.append('text')
   .attr('transform', 'rotate(-90)')
   .attr('x', -height / 2)
   .attr('y', -60)
   .attr('text-anchor', 'middle')
   .style('font-size', '14px')
-  .text('{value_col} (%)');
+  .style('font-weight', 'bold')
+  .text('{value_col}');
 
 const line = d3.line()
   .x(d => x(d['{time_col}']))
   .y(d => y(d['{value_col}']))
   .curve(d3.curveMonotoneX);
 
-itemNames.forEach(function(itemName, idx) {{
-  const itemData = data
-    .filter(d => d['{item_col}'] === itemName)
-    .sort((a, b) => a['{time_col}'].localeCompare(b['{time_col}']));
+itemNames.forEach(function(itemName) {{
+  const itemData = data.filter(d => d['{item_col}'] === itemName);
   
-  if (itemData.length === 0) return;
-  
-  const path = svg.append('path')
+  svg.append('path')
     .datum(itemData)
     .attr('fill', 'none')
     .attr('stroke', colorScale(itemName))
-    .attr('stroke-width', 3)
-    .attr('d', line);
-  
-  const totalLength = path.node().getTotalLength();
-  path
-    .attr('stroke-dasharray', totalLength + ' ' + totalLength)
-    .attr('stroke-dashoffset', totalLength)
+    .attr('stroke-width', 2.5)
+    .attr('d', line)
+    .style('opacity', 0)
     .transition()
-    .duration(2000)
-    .delay(idx * 200)
-    .attr('stroke-dashoffset', 0);
+    .duration(1500)
+    .style('opacity', 1);
 }});
 
 const legend = svg.append('g')
-  .attr('transform', 'translate(' + (width + 30) + ', 0)');
+  .attr('transform', 'translate(' + (width + 20) + ', 0)');
 
-itemNames.forEach(function(name, i) {{
+itemNames.forEach(function(itemName, i) {{
   const legendRow = legend.append('g')
-    .attr('transform', 'translate(0, ' + (i * 30) + ')');
-  
-  legendRow.append('rect')
-    .attr('width', 20)
-    .attr('height', 20)
-    .attr('fill', colorScale(name));
-  
+    .attr('transform', 'translate(0, ' + (i * 25) + ')');
+
+  legendRow.append('line')
+    .attr('x1', 0)
+    .attr('x2', 20)
+    .attr('y1', 10)
+    .attr('y2', 10)
+    .attr('stroke', colorScale(itemName))
+    .attr('stroke-width', 2.5);
+
   legendRow.append('text')
     .attr('x', 25)
-    .attr('y', 15)
-    .text(name);
+    .attr('y', 14)
+    .text(itemName)
+    .style('font-size', '12px');
 }});
+
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', -40)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '20px')
+  .style('font-weight', 'bold')
+  .text('Item Usage Over Time');
 
 svg.append('text')
   .attr('x', width / 2)
   .attr('y', -20)
   .attr('text-anchor', 'middle')
-  .style('font-size', '18px')
-  .style('font-weight', 'bold')
-  .text('{value_col} by {item_col} over {time_col}');
+  .style('font-size', '14px')
+  .style('fill', '#666')
+  .text('Monthly trends by item');
 
 console.log('Multi-line chart rendered');
 """
 
 
 def generate_enhanced_line_chart(time_col: str, value_col: str) -> str:
-    """Generate single line chart with area fill."""
+    """Generate line chart."""
     return f"""
 console.log('Rendering line chart...');
 const margin = {{top: 60, right: 50, bottom: 80, left: 80}};
@@ -842,15 +892,8 @@ d3.select('#chart')
             group_col = col
             break
 
-    # Extract person name from query
-    resource_name = None
-    if 'usage' in user_prompt.lower() or 'loading' in user_prompt.lower():
-        words = user_prompt.split()
-        for i, word in enumerate(words):
-            if word.lower() in ['usage', 'loading', 'capacity', 'utilization', 'time']:
-                if i > 0:
-                    resource_name = words[i-1].strip(',')
-                    break
+    # UPDATED: Use the new extraction function
+    resource_name = extract_resource_name(user_prompt)
 
     # Check if list query
     is_list_query = (
