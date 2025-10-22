@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block content %}
+<!-- Header with add button -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Stations</h2>
+    <a href="{{ url_for('stations.add_form') }}" class="btn btn-primary">
+        <i class="bi bi-plus"></i> Add New Station
+    </a>
+</div>
+
+<!-- Stations table -->
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Station Name</th>
+                <th>Mapped Products</th>
+                <th>Loading Records</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if stations %}
+                {% for station in stations %}
+                <tr>
+                    <td>{{ station['id'] }}</td>
+                    <td>
+                        <strong>{{ station['itemname'] }}</strong>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">{{ station['mapped_products'] }}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-success">{{ station['loading_count'] }}</span>
+                    </td>
+                    <td>
+                        <!-- View usage -->
+                        <a href="{{ url_for('stations.view_usage', id=station['id']) }}" 
+                           class="btn btn-sm btn-outline-info">
+                            View Usage
+                        </a>
+                        
+                        <!-- Edit button -->
+                        <a href="{{ url_for('stations.edit_form', id=station['id']) }}" 
+                           class="btn btn-sm btn-outline-primary">
+                            Edit
+                        </a>
+                        
+                        <!-- Delete button -->
+                        <form method="post" 
+                              action="{{ url_for('stations.delete_station', id=station['id']) }}" 
+                              style="display:inline;"
+                              onsubmit="return confirm('Delete station \'{{ station['itemname'] }}\'? This will fail if mappings or loading records exist.');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">
+                        No stations found. Add one to start tracking station-based loading!
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Info card -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">About Stations</h5>
+        <p class="card-text">
+            Stations represent work locations or physical stations that work on products. 
+            Loading percentages can be allocated across different products per month.
+        </p>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ stations|length }}</h3>
+                <p class="text-muted mb-0">Total Stations</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ stations|sum(attribute='mapped_products') }}</h3>
+                <p class="text-muted mb-0">Total Mappings</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ stations|sum(attribute='loading_count') }}</h3>
+                <p class="text-muted mb-0">Loading Records</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

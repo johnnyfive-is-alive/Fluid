@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Edit Unit</h2>
+
+<!-- Edit form -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('units.edit_unit', id=unit['id']) }}">
+            <div class="mb-3">
+                <label for="unitname" class="form-label">Unit Name</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="unitname" 
+                       name="unitname" 
+                       value="{{ unit['itemname'] }}" 
+                       required>
+                <div class="form-text">
+                    Unit name must be unique.
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <button type="submit" class="btn btn-primary">Update Unit</button>
+            <a href="{{ url_for('units.list_units') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

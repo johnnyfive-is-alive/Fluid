@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Add New Station</h2>
+
+<!-- Add form -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('stations.add_station') }}">
+            <div class="mb-3">
+                <label for="stationname" class="form-label">Station Name</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="stationname" 
+                       name="stationname" 
+                       placeholder="e.g., DV-SPYKER, DV-JAGUAR" 
+                       required>
+                <div class="form-text">
+                    Station names will be automatically converted to UPPERCASE.
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <button type="submit" class="btn btn-primary">Add Station</button>
+            <a href="{{ url_for('stations.list_stations') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<!-- Examples card -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">What is a Station?</h5>
+        <p class="card-text">
+            Stations represent physical work locations or equipment stations that can be allocated to products.
+            Station names are always in UPPERCASE.
+        </p>
+    </div>
+</div>
+{% endblock %}

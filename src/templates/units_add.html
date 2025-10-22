@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Add New Unit</h2>
+
+<!-- Add form -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('units.add_unit') }}">
+            <div class="mb-3">
+                <label for="unitname" class="form-label">Unit Name</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="unitname" 
+                       name="unitname" 
+                       placeholder="e.g., Engineering Team, Quality Assurance" 
+                       required>
+                <div class="form-text">
+                    Enter a unique name for this unit.
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <button type="submit" class="btn btn-primary">Add Unit</button>
+            <a href="{{ url_for('units.list_units') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<!-- Examples card -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">What is a Unit?</h5>
+        <p class="card-text">
+            Units represent organizational units, teams, or departments that can be allocated to products.
+            Examples include Engineering Team, Quality Assurance, or Support Division.
+        </p>
+    </div>
+</div>
+{% endblock %}

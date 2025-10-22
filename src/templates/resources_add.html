@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Add New Resource</h2>
+
+<!-- Add form -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('resources.add_resource') }}">
+            <div class="mb-3">
+                <label for="resourcename" class="form-label">Resource Name</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="resourcename" 
+                       name="resourcename" 
+                       placeholder="e.g., John Smith, Equipment A" 
+                       required>
+                <div class="form-text">
+                    Enter a unique name for this resource.
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <button type="submit" class="btn btn-primary">Add Resource</button>
+            <a href="{{ url_for('resources.list_resources') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<!-- Examples card -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">What is a Resource?</h5>
+        <p class="card-text">
+            Resources represent people, equipment, or other assets that can be allocated to products.
+            Examples include staff members, tools, or facilities.
+        </p>
+    </div>
+</div>
+{% endblock %}

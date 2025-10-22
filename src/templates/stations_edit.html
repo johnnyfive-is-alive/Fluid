@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Edit Station</h2>
+
+<!-- Edit form -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('stations.edit_station', id=station['id']) }}">
+            <div class="mb-3">
+                <label for="stationname" class="form-label">Station Name</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="stationname" 
+                       name="stationname" 
+                       value="{{ station['itemname'] }}" 
+                       required>
+                <div class="form-text">
+                    Station name must be unique and will be converted to UPPERCASE.
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <button type="submit" class="btn btn-primary">Update Station</button>
+            <a href="{{ url_for('stations.list_stations') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Unit Usage: {{ unit['itemname'] }}</h2>
+
+<!-- Back button -->
+<a href="{{ url_for('units.list_units') }}" class="btn btn-secondary mb-3">
+    <i class="bi bi-arrow-left"></i> Back to Units
+</a>
+
+<!-- Usage Summary -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ mapped_products|length }}</h3>
+                <p class="text-muted mb-0">Products Used</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ loading_stats['total_records'] }}</h3>
+                <p class="text-muted mb-0">Loading Records</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ loading_stats['month_count'] }}</h3>
+                <p class="text-muted mb-0">Months Tracked</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Products this unit works on -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Products This Unit Works On</h5>
+    </div>
+    <div class="card-body">
+        {% if mapped_products %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th>Loading Records</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in mapped_products %}
+                    <tr>
+                        <td><strong>{{ product['itemname'] }}</strong></td>
+                        <td><span class="badge bg-success">{{ product['loading_count'] }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">This unit has no loading records yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Monthly Loading Details -->
+{% if loading_details %}
+<!-- Chart.js Script -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Monthly Loading Breakdown</h5>
+    </div>
+    <div class="card-body">
+        <!-- Chart Container -->
+        <div id="loadingChart" style="width: 100%; height: 400px;"></div>
+
+        <!-- Data Table (collapsible) -->
+        <div class="mt-4">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#dataTable">
+                <i class="bi bi-table"></i> Show Data Table
+            </button>
+            <div class="collapse mt-3" id="dataTable">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Product</th>
+                                <th>Allocation %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for detail in loading_details %}
+                            <tr>
+                                <td>{{ detail['monthyear'] }}</td>
+                                <td>{{ detail['productname'] }}</td>
+                                <td>{{ detail['percent'] }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Prepare data for stacked bar chart
+const rawData = {{ loading_details|tojson }};
+
+// Debug: Log the data to console
+console.log('Loading details data:', rawData);
+
+// Group by month
+const monthlyData = {};
+const products = new Set();
+
+rawData.forEach(item => {
+    const month = item.monthyear;
+    const product = item.productname;
+    const percent = item.percent;
+
+    if (!monthlyData[month]) {
+        monthlyData[month] = {};
+    }
+    monthlyData[month][product] = percent;
+    products.add(product);
+});
+
+// Sort months chronologically
+const months = Object.keys(monthlyData).sort();
+const productList = Array.from(products).sort();
+
+console.log('Months:', months);
+console.log('Products:', productList);
+
+// Create datasets (one per product)
+const datasets = productList.map((product, index) => {
+    const colors = [
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(255, 206, 86, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 159, 64, 0.8)',
+        'rgba(199, 199, 199, 0.8)',
+        'rgba(83, 102, 255, 0.8)',
+        'rgba(255, 99, 255, 0.8)',
+        'rgba(99, 255, 132, 0.8)'
+    ];
+
+    return {
+        label: product,
+        data: months.map(month => monthlyData[month][product] || 0),
+        backgroundColor: colors[index % colors.length],
+        borderColor: colors[index % colors.length].replace('0.8', '1'),
+        borderWidth: 1
+    };
+});
+
+// Wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Create the chart
+    const ctx = document.getElementById('loadingChart');
+    if (ctx) {
+        new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Month'
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Allocation %'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Unit Allocation by Product Over Time',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        console.log('Chart created successfully');
+    } else {
+        console.error('Chart canvas element not found');
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

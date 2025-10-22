@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Resource Usage: {{ resource['itemname'] }}</h2>
+
+<!-- Back button -->
+<a href="{{ url_for('resources.list_resources') }}" class="btn btn-secondary mb-3">
+    <i class="bi bi-arrow-left"></i> Back to Resources
+</a>
+
+<!-- Usage Summary -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ mapped_products|length }}</h3>
+                <p class="text-muted mb-0">Products Used</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ loading_stats['total_records'] }}</h3>
+                <p class="text-muted mb-0">Loading Records</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="display-4">{{ loading_stats['month_count'] }}</h3>
+                <p class="text-muted mb-0">Months Tracked</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Products this resource works on -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Products This Resource Works On</h5>
+    </div>
+    <div class="card-body">
+        {% if mapped_products %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th>Loading Records</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in mapped_products %}
+                    <tr>
+                        <td><strong>{{ product['itemname'] }}</strong></td>
+                        <td><span class="badge bg-success">{{ product['loading_count'] }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">This resource has no loading records yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Monthly Loading Details -->
+{% if loading_details %}
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Loading Allocation Over Time</h5>
+    </div>
+    <div class="card-body">
+        <!-- Chart Canvas -->
+        <div class="mb-3">
+            <canvas id="loadingChart" style="max-height: 400px;"></canvas>
+        </div>
+
+        <!-- Detailed Table (collapsible) -->
+        <div class="mt-4">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#dataTable">
+                <i class="bi bi-table"></i> Show Data Table
+            </button>
+            <div class="collapse mt-3" id="dataTable">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Month</th>
+                                <th>Product</th>
+                                <th class="text-end">Allocation %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in loading_details %}
+                            <tr>
+                                <td><strong>{{ record['monthyear'] }}</strong></td>
+                                <td>{{ record['productname'] }}</td>
+                                <td class="text-end">{{ '%.1f' % record['percent'] }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Prepare chart data from loading details
+    const loadingDetails = {{ loading_details|tojson }};
+
+    // Group by month and aggregate by product
+    const monthlyData = {};
+    const products = new Set();
+
+    loadingDetails.forEach(record => {
+        if (!monthlyData[record.monthyear]) {
+            monthlyData[record.monthyear] = {};
+        }
+        monthlyData[record.monthyear][record.productname] = record.percent;
+        products.add(record.productname);
+    });
+
+    const months = Object.keys(monthlyData).sort();
+    const productArray = Array.from(products).sort();
+
+    // Create datasets for each product
+    const colors = [
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(255, 206, 86, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 159, 64, 0.8)',
+        'rgba(199, 199, 199, 0.8)',
+        'rgba(83, 102, 255, 0.8)',
+        'rgba(255, 99, 255, 0.8)',
+        'rgba(99, 255, 132, 0.8)'
+    ];
+
+    const datasets = productArray.map((product, idx) => {
+        return {
+            label: product,
+            data: months.map(month => monthlyData[month][product] || 0),
+            backgroundColor: colors[idx % colors.length],
+            borderColor: colors[idx % colors.length].replace('0.8', '1'),
+            borderWidth: 2
+        };
+    });
+
+    // Create the chart
+    const ctx = document.getElementById('loadingChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Loading Allocation by Product and Month (%)',
+                    font: { size: 16 }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Allocation %'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

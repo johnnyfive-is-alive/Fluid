@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Edit Resource</h2>
+
+<!-- Edit form -->
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('resources.edit_resource', id=resource['id']) }}">
+            <div class="mb-3">
+                <label for="resourcename" class="form-label">Resource Name</label>
+                <input type="text" 
+                       class="form-control" 
+                       id="resourcename" 
+                       name="resourcename" 
+                       value="{{ resource['itemname'] }}" 
+                       required>
+                <div class="form-text">
+                    Resource name must be unique.
+                </div>
+            </div>
+
+            <!-- Action buttons -->
+            <button type="submit" class="btn btn-primary">Update Resource</button>
+            <a href="{{ url_for('resources.list_resources') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

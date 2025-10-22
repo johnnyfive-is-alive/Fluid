@@ -33,6 +33,39 @@
 </ul>
 </li>
 
+<!-- Resources dropdown -->
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+    <i class="bi bi-person"></i> Resources
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item" href="{{ url_for('resources.list_resources') }}">View All</a></li>
+<li><a class="dropdown-item" href="{{ url_for('resources.add_form') }}">Add New</a></li>
+</ul>
+</li>
+
+<!-- Stations dropdown -->
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+    <i class="bi bi-gear"></i> Stations
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item" href="{{ url_for('stations.list_stations') }}">View All</a></li>
+<li><a class="dropdown-item" href="{{ url_for('stations.add_form') }}">Add New</a></li>
+</ul>
+</li>
+
+<!-- Units dropdown -->
+<li class="nav-item dropdown">
+<a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+    <i class="bi bi-layers"></i> Units
+</a>
+<ul class="dropdown-menu">
+<li><a class="dropdown-item" href="{{ url_for('units.list_units') }}">View All</a></li>
+<li><a class="dropdown-item" href="{{ url_for('units.add_form') }}">Add New</a></li>
+</ul>
+</li>
+
 <!-- Products dropdown -->
 <li class="nav-item dropdown">
 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
