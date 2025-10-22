@@ -17,13 +17,13 @@ Manage your resources, stations, products,and loading allocations in one place.
 <div class="card h-100 border-success">
 <div class="card-body">
 <h5 class="card-title">
-    <i class="bi bi-box text-success"></i> Items
+    <i class="bi bi-box text-success"></i> Staff, Stations, or Units
 </h5>
 <p class="card-text">
 Add/Remove or Edit Staff, Stations, or Units in the database.
 </p>
 <a href="{{ url_for('items.list_items') }}" class="btn btn-success">
-View Items
+View
 </a>
 <a href="{{ url_for('items.add_form') }}" class="btn btn-outline-success">
 Add Item
@@ -40,7 +40,7 @@ Add Item
     <i class="bi bi-basket text-info"></i> Products
 </h5>
 <p class="card-text">
-Define products that Staff or Stations are allocated to.
+Define products that Staff, Stations or Units are allocated to.
 </p>
 <a href="{{ url_for('products.list_products') }}" class="btn btn-info text-white">
 View Products
@@ -78,11 +78,10 @@ Add Characteristic
 <div class="card h-100 border-danger">
 <div class="card-body">
 <h5 class="card-title">
-    <i class="bi bi-grid-3x3 text-danger"></i> Loading Grid
+    <i class="bi bi-grid-3x3 text-danger"></i> Allocations
 </h5>
 <p class="card-text">
-Edit loading percentages for Staff, Stations or Units across products and months.
-Allocation assignment in a convenient grid format.
+Edit loading percentages month to  month for Staff, Stations or Units across products in a convenient grid format.
 </p>
 <a href="{{ url_for('loading.grid_selector') }}" class="btn btn-danger">
 Open Grid

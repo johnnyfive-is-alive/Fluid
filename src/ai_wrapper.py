@@ -8,6 +8,8 @@ ENHANCEMENTS:
 - Enhanced data pivoting for multi-line charts
 - Uses enhanced fallback visualizations for all item types
 - FIXED: Avoid COALESCE in GROUP BY (SQLite compatibility)
+- FIXED: Catches i.itemtype (should be i.fkitemtype)
+- FIXED: Converts subqueries to JOINs for better performance
 
 Installation: pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 """
@@ -66,7 +68,7 @@ class LlamaQueryProcessor:
 
             self.llm = Llama(
                 model_path=self.model_path,
-                n_ctx=2048,          # Context window size
+                n_ctx=4096,          # Context window size (increased for longer prompts)
                 n_threads=4,         # Conservative thread count
                 n_gpu_layers=0,      # CPU only for compatibility
                 n_batch=512,         # Batch size
@@ -252,17 +254,113 @@ class LlamaQueryProcessor:
         2. Missing table aliases
         3. Invalid SQLite syntax
         4. COALESCE in GROUP BY (causes token errors)
+        5. Wrong column names (i.itemtype should be i.fkitemtype)
+        6. Inefficient subqueries for itemtype filtering
+        7. Product queries filtering on i.itemname instead of p.itemname
         """
         import re
 
-        # Check if query references it.typename or typename without proper JOIN
+        # FIX 1: Replace incorrect column reference i.itemtype with i.fkitemtype
+        if re.search(r'\bi\.itemtype\b', sql_query, re.IGNORECASE):
+            print("⚠️  Found i.itemtype (incorrect column name) - fixing to i.fkitemtype...")
+            sql_query = re.sub(r'\bi\.itemtype\b', 'i.fkitemtype', sql_query, flags=re.IGNORECASE)
+            print("✅ Changed 'i.itemtype' to 'i.fkitemtype'")
+
+        # FIX 2: Detect product queries that should filter on p.itemname, not i.itemname
+        # Common product names: BEEHIVE, GENERIC, VHAGAR, R64-72, etc. (UPPERCASE)
+        product_pattern = r"WHERE\s+i\.itemname\s+LIKE\s+'%([A-Z][A-Z0-9\s\-]+)%'"
+        match = re.search(product_pattern, sql_query, re.IGNORECASE)
+
+        if match:
+            product_keyword = match.group(1)
+            # Check if this looks like a product name (all uppercase, common product keywords)
+            product_keywords = ['BEEHIVE', 'GENERIC', 'VHAGAR', 'R64', 'R72', 'OCM']
+
+            if any(keyword in product_keyword.upper() for keyword in product_keywords):
+                print(f"⚠️  Found product query filtering on i.itemname (should be p.itemname)")
+                print(f"    Product keyword: {product_keyword}")
+
+                # Replace WHERE i.itemname LIKE '%PRODUCT%' with WHERE p.itemname LIKE '%PRODUCT%'
+                sql_query = re.sub(
+                    r"WHERE\s+i\.itemname\s+LIKE\s+'%([^']+)%'",
+                    r"WHERE p.itemname LIKE '%\1%'",
+                    sql_query,
+                    flags=re.IGNORECASE
+                )
+                print(f"✅ Changed filter from i.itemname to p.itemname")
+
+                # Also ensure we're filtering by station type if not already present
+                if not re.search(r"it\.typename\s*=\s*['\"]STATION['\"]", sql_query, re.IGNORECASE):
+                    print("⚠️  Adding STATION type filter for product query...")
+
+                    # Add JOIN itemtypes if not present
+                    if not re.search(r'JOIN\s+itemtypes\s+it\s+ON', sql_query, re.IGNORECASE):
+                        items_join = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\n]+)', sql_query, re.IGNORECASE)
+                        if items_join:
+                            insert_pos = items_join.end()
+                            join_clause = "\n  JOIN itemtypes it ON i.fkitemtype = it.id"
+                            sql_query = sql_query[:insert_pos] + join_clause + sql_query[insert_pos:]
+                            print("✅ Added: JOIN itemtypes it ON i.fkitemtype = it.id")
+
+                    # Add typename filter to WHERE clause
+                    where_match = re.search(r'(WHERE\s+p\.itemname[^\n]+)', sql_query, re.IGNORECASE)
+                    if where_match:
+                        insert_pos = where_match.end()
+                        sql_query = sql_query[:insert_pos] + "\n  AND it.typename = 'STATION'" + sql_query[insert_pos:]
+                        print("✅ Added: AND it.typename = 'STATION'")
+
+        # FIX 3: Incorrect subquery pattern for filtering by item type
+        # WRONG: WHERE i.fkitemtype = (SELECT id FROM itemtypes WHERE it.typename = 'RESOURCE')
+        # RIGHT: JOIN itemtypes it ON i.fkitemtype = it.id WHERE it.typename = 'RESOURCE'
+        subquery_pattern = r'WHERE\s+i\.fkitemtype\s*=\s*\(\s*SELECT\s+id\s+FROM\s+itemtypes\s+WHERE\s+\w+\.typename\s*=\s*["\'](\w+)["\']\s*\)'
+        match = re.search(subquery_pattern, sql_query, re.IGNORECASE)
+
+        if match:
+            print("⚠️  Found subquery for itemtype filter - converting to JOIN...")
+            typename = match.group(1)
+
+            # Remove the WHERE clause with subquery
+            sql_query = re.sub(subquery_pattern, '', sql_query, flags=re.IGNORECASE)
+
+            # Add JOIN itemtypes if not already present
+            if not re.search(r'JOIN\s+itemtypes\s+it\s+ON', sql_query, re.IGNORECASE):
+                # Add JOIN after items join
+                items_join_match = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\n]+)', sql_query, re.IGNORECASE)
+                if items_join_match:
+                    insert_pos = items_join_match.end()
+                    join_clause = f"\n  JOIN itemtypes it ON i.fkitemtype = it.id"
+                    sql_query = sql_query[:insert_pos] + join_clause + sql_query[insert_pos:]
+                    print("✅ Added: JOIN itemtypes it ON i.fkitemtype = it.id")
+
+            # Add WHERE clause for typename
+            # Find WHERE clause or add one before GROUP BY/ORDER BY
+            if re.search(r'\bWHERE\b', sql_query, re.IGNORECASE):
+                # Add to existing WHERE clause
+                # Find the WHERE keyword and add condition after it
+                where_match = re.search(r'(\bWHERE\b\s*)', sql_query, re.IGNORECASE)
+                if where_match:
+                    insert_pos = where_match.end()
+                    sql_query = sql_query[:insert_pos] + f"it.typename = '{typename}' AND " + sql_query[insert_pos:]
+                    print(f"✅ Added typename filter: it.typename = '{typename}'")
+            else:
+                # Add new WHERE clause before GROUP BY or ORDER BY
+                group_or_order = re.search(r'\b(GROUP BY|ORDER BY)\b', sql_query, re.IGNORECASE)
+                if group_or_order:
+                    insert_pos = group_or_order.start()
+                    sql_query = sql_query[:insert_pos] + f"WHERE it.typename = '{typename}'\n" + sql_query[insert_pos:]
+                else:
+                    # Add at end before semicolon
+                    sql_query = sql_query.rstrip(';').rstrip() + f"\nWHERE it.typename = '{typename}';"
+                print(f"✅ Added typename filter: it.typename = '{typename}'")
+
+        # FIX 4: Check if query references it.typename without proper JOIN
         if re.search(r'\bit\.typename\b', sql_query, re.IGNORECASE):
             # Check if itemtypes is properly joined
             if not re.search(r'JOIN\s+itemtypes\s+it\s+ON', sql_query, re.IGNORECASE):
                 print("⚠️  Found it.typename without JOIN itemtypes - attempting to fix...")
 
                 # Try to auto-fix: add the JOIN after items join
-                items_join = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\s]+\s*)', sql_query, re.IGNORECASE)
+                items_join = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\n]+)', sql_query, re.IGNORECASE)
                 if items_join:
                     insert_pos = items_join.end()
                     join_clause = "\n  JOIN itemtypes it ON i.fkitemtype = it.id"
@@ -271,14 +369,14 @@ class LlamaQueryProcessor:
                 else:
                     print("❌ Could not auto-fix - manual correction needed")
 
-        # Check for WHERE typename without it. alias
+        # FIX 5: Check for WHERE typename without it. alias
         if re.search(r'WHERE\s+typename\s*=', sql_query, re.IGNORECASE) and \
            not re.search(r'WHERE\s+it\.typename\s*=', sql_query, re.IGNORECASE):
             print("⚠️  Found WHERE typename without alias - fixing...")
             sql_query = re.sub(r'\bWHERE\s+typename\b', 'WHERE it.typename', sql_query, flags=re.IGNORECASE)
             print("✅ Changed 'WHERE typename' to 'WHERE it.typename'")
 
-        # CRITICAL FIX: Replace COALESCE in GROUP BY with CASE WHEN
+        # FIX 6: CRITICAL - Replace COALESCE in GROUP BY
         # COALESCE with string literals causes "unrecognized token: '" error in SQLite GROUP BY
         if re.search(r'GROUP BY.*COALESCE', sql_query, re.IGNORECASE | re.DOTALL):
             print("⚠️  Found COALESCE in GROUP BY - this causes SQLite errors, fixing...")
@@ -306,12 +404,18 @@ class LlamaQueryProcessor:
         - Product-based loading structure
         - SQL validation and auto-correction
         - FIXED: Avoid COALESCE in GROUP BY clauses
+        - FIXED: Use correct column name i.fkitemtype (not i.itemtype)
         """
 
         system_context = f"""SQLite query generator. Use ONLY SQLite syntax.
 
 SCHEMA:
 {self.schema}
+
+CRITICAL COLUMN NAMES:
+- items.fkitemtype (NOT items.itemtype) - foreign key to itemtypes.id
+- items.fkitemtype is an INTEGER (foreign key)
+- To get typename: JOIN itemtypes it ON i.fkitemtype = it.id
 
 CRITICAL SQLITE SYNTAX RULES (NO PostgreSQL):
 1. NO EXTRACT, NO INTERVAL - monthyear is already 'YYYY-MM' format
@@ -331,6 +435,28 @@ For display, use CASE WHEN in SELECT:
 IMPORTANT: ALWAYS JOIN itemtypes WHEN FILTERING BY TYPE
 - If WHERE clause uses it.typename, you MUST JOIN itemtypes it ON i.fkitemtype = it.id
 - Never reference it.typename without JOIN itemtypes it ON i.fkitemtype = it.id
+- CORRECT column name is i.fkitemtype (NOT i.itemtype)
+
+FILTERING BY ITEM TYPE (CRITICAL):
+✅ CORRECT:
+```sql
+SELECT i.itemname, it.typename, SUM(il.percent) as total
+FROM itemloading il
+JOIN items i ON il.fkitem = i.id
+JOIN itemtypes it ON i.fkitemtype = it.id
+WHERE it.typename = 'RESOURCE'
+GROUP BY i.itemname, it.typename
+```
+
+❌ WRONG (uses subquery and wrong column):
+```sql
+WHERE i.itemtype = (SELECT id FROM itemtypes WHERE typename = 'RESOURCE')
+```
+
+❌ WRONG (missing JOIN):
+```sql
+WHERE it.typename = 'RESOURCE'  -- it is not defined!
+```
 
 PERSON/RESOURCE QUERIES (CRITICAL):
 When user asks about a SPECIFIC PERSON's usage/loading/time allocation:
@@ -354,27 +480,52 @@ WHERE i.itemname LIKE '%Pavan%' OR i.itemname LIKE '%Eranki%'
 ORDER BY il.monthyear, product
 ```
 
+PRODUCT/PROGRAM QUERIES (CRITICAL):
+When user asks about usage/loading/allocation FOR A PRODUCT OR PROGRAM:
+- Keywords: "for the X program", "X product usage", "stations working on X", "beehive program"
+- The product is in the items table with typename='PRODUCT' (e.g., "BEEHIVE 300G", "BEEHIVE R304")
+- You want to see WHICH ITEMS/STATIONS are working on that product
+- WRONG: Filter i.itemname (that's looking for a station named BEEHIVE)
+- CORRECT: Filter p.itemname (that's the product being worked on)
+
+EXAMPLE - "Give me station usage for the beehive program" or "stations working on beehive":
+```sql
+SELECT 
+  i.itemname,
+  il.monthyear,
+  CASE WHEN p.itemname IS NULL THEN 'UNALLOCATED' ELSE p.itemname END AS product,
+  SUM(il.percent) as total_percent
+FROM itemloading il
+JOIN items i ON il.fkitem = i.id
+JOIN itemtypes it ON i.fkitemtype = it.id
+LEFT JOIN items p ON il.fkproduct = p.id
+WHERE p.itemname LIKE '%BEEHIVE%'
+  AND it.typename = 'STATION'
+  AND il.monthyear BETWEEN '2025-01' AND '2025-12'
+GROUP BY i.itemname, il.monthyear, p.itemname
+ORDER BY il.monthyear, i.itemname
+```
+
+Or if they want aggregated view by product:
+```sql
+SELECT 
+  CASE WHEN p.itemname IS NULL THEN 'UNALLOCATED' ELSE p.itemname END AS product,
+  il.monthyear,
+  COUNT(DISTINCT il.fkitem) AS station_count,
+  SUM(il.percent) AS total_percent
+FROM itemloading il
+LEFT JOIN items p ON il.fkproduct = p.id
+WHERE il.monthyear BETWEEN '2025-01' AND '2025-12'
+GROUP BY p.itemname, il.monthyear
+ORDER BY il.monthyear, p.itemname
+```
+
 DETECTION RULES:
-- If query mentions a person's name + "usage/loading/time/capacity" → Filter by that person's itemname
-- Look for names in the query: "Pavan", "Gabor", "Steven", etc.
-- These are RESOURCES (people) in the items table
-- Show their allocation across products over time
-
-ITEM TYPE QUERIES (CRITICAL):
-To get items with their types:
-  SELECT i.itemname, it.typename
-  FROM items i
-  JOIN itemtypes it ON i.fkitemtype = it.id
-
-To filter by specific type (MUST include JOIN):
-  SELECT i.itemname, il.monthyear, SUM(il.percent) as total
-  FROM itemloading il
-  JOIN items i ON il.fkitem = i.id
-  JOIN itemtypes it ON i.fkitemtype = it.id
-  WHERE it.typename = 'RESOURCE'
-  GROUP BY i.itemname, il.monthyear
-
-Item names: STATIONS are uppercase (DV-SPYKER), RESOURCES may be mixed (Gabor Farkas)
+- Person query: "Pavan usage", "Gabor loading" → Filter i.itemname (the person)
+- Product query: "beehive program", "for X product", "stations on X" → Filter p.itemname (the product)
+- If query says "program" or "product" → It's asking about a product
+- Product names are UPPERCASE: BEEHIVE, GENERIC, R64-72, VHAGAR, etc.
+- Person names are mixed case: Pavan Eranki, Gabor Farkas, etc.
 
 LOADING QUERIES WITH PRODUCTS:
 ```sql
@@ -396,6 +547,7 @@ IMPORTANT NOTES:
 - UNALLOCATED: il.fkproduct IS NULL or p.itemname = 'UNALLOCATED'
 - Always JOIN itemtypes if you need typename in SELECT or WHERE
 - Use CASE WHEN for NULL handling in SELECT, NOT COALESCE in GROUP BY
+- CORRECT column: i.fkitemtype (NOT i.itemtype)
 
 Return ONLY SQL in ```sql blocks."""
 
