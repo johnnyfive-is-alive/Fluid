@@ -6,9 +6,14 @@
             <h2>
                 <i class="bi bi-robot"></i> AI-Powered Data Insights
             </h2>
-            <a href="{{ url_for('ai_query.get_schema') }}" class="btn btn-sm btn-outline-secondary" target="_blank">
-                <i class="bi bi-database"></i> View Schema
-            </a>
+            <div>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bookmarksModal">
+                    <i class="bi bi-bookmark-star"></i> Bookmarked Queries (<span id="bookmarkCount">0</span>)
+                </button>
+                <a href="{{ url_for('ai_query.get_schema') }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+                    <i class="bi bi-database"></i> View Schema
+                </a>
+            </div>
         </div>
 
         <!-- Query Input -->
@@ -19,7 +24,7 @@
             <div class="card-body">
                 <div class="mb-3">
                     <label for="queryInput" class="form-label">Natural Language Query</label>
-                    <textarea class="form-control" id="queryInput" rows="3" 
+                    <textarea class="form-control" id="queryInput" rows="3"
                               placeholder="Examples:&#10;- Show me loading percentages by product and month&#10;- Which items have the highest loading in 2025?&#10;- Compare characteristics across item types"></textarea>
                 </div>
                 <button class="btn btn-primary btn-lg" id="submitQuery" onclick="processQuery()">
@@ -36,6 +41,26 @@
 
         <!-- Visualization Results -->
         <div id="resultsContainer" class="d-none">
+            <!-- Action Buttons for Current Result -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-success" onclick="bookmarkCurrentQuery()">
+                            <i class="bi bi-bookmark-plus"></i> Bookmark This Query
+                        </button>
+                        <button class="btn btn-info" onclick="exportAsGoodExample()">
+                            <i class="bi bi-check-circle"></i> Export as Good Training Example
+                        </button>
+                        <button class="btn btn-warning" onclick="exportAsBadExample()">
+                            <i class="bi bi-x-circle"></i> Export as Bad Training Example
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportFullResults()">
+                            <i class="bi bi-download"></i> Export Complete Results
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="card mb-4">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
@@ -52,7 +77,7 @@
                 <!-- Phase 1: SQL Generation -->
                 <div class="accordion-item">
                     <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#phase1Collapse">
                             <i class="bi bi-1-circle me-2"></i>
                             Phase 1: SQL Query Generation
@@ -71,7 +96,7 @@
                 <!-- Phase 2: Data Retrieval -->
                 <div class="accordion-item">
                     <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#phase2Collapse">
                             <i class="bi bi-2-circle me-2"></i>
                             Phase 2: Data Retrieval & Pivot Processing
@@ -96,7 +121,7 @@
                 <!-- Phase 3: Visualization Code -->
                 <div class="accordion-item">
                     <h2 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                 data-bs-target="#phase3Collapse">
                             <i class="bi bi-3-circle me-2"></i>
                             Phase 3: D3.js Visualization Code
@@ -126,8 +151,31 @@
                 <p class="mb-0" id="errorDetails"></p>
             </div>
         </div>
+    </div>
+</div>
 
-
+<!-- Bookmarks Modal -->
+<div class="modal fade" id="bookmarksModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-bookmark-star"></i> Bookmarked Queries
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="bookmarksList">
+                    <p class="text-muted text-center">No bookmarked queries yet. Run a query and click "Bookmark This Query" to save it.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="clearAllBookmarks()">
+                    <i class="bi bi-trash"></i> Clear All
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -135,6 +183,233 @@
 <script src="https://d3js.org/d3.v7.min.js"></script>
 
 <script>
+// Global storage for current query results
+let currentQueryData = null;
+
+// Load bookmarks from localStorage on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateBookmarkCount();
+    loadBookmarks();
+});
+
+function getBookmarks() {
+    const stored = localStorage.getItem('aiQueryBookmarks');
+    return stored ? JSON.parse(stored) : [];
+}
+
+function saveBookmarks(bookmarks) {
+    localStorage.setItem('aiQueryBookmarks', JSON.stringify(bookmarks));
+    updateBookmarkCount();
+    loadBookmarks();
+}
+
+function updateBookmarkCount() {
+    const bookmarks = getBookmarks();
+    document.getElementById('bookmarkCount').textContent = bookmarks.length;
+}
+
+function bookmarkCurrentQuery() {
+    if (!currentQueryData) {
+        alert('No query results to bookmark');
+        return;
+    }
+
+    const bookmark = {
+        id: Date.now(),
+        query: currentQueryData.query,
+        sql: currentQueryData.sql,
+        timestamp: new Date().toISOString(),
+        rowCount: currentQueryData.rowCount
+    };
+
+    const bookmarks = getBookmarks();
+
+    // Check if query already bookmarked
+    const exists = bookmarks.some(b => b.query === bookmark.query);
+    if (exists) {
+        if (!confirm('This query is already bookmarked. Add it again?')) {
+            return;
+        }
+    }
+
+    bookmarks.unshift(bookmark); // Add to beginning
+
+    // Keep only last 50 bookmarks
+    if (bookmarks.length > 50) {
+        bookmarks.pop();
+    }
+
+    saveBookmarks(bookmarks);
+
+    // Show success message
+    const toast = document.createElement('div');
+    toast.className = 'alert alert-success position-fixed bottom-0 end-0 m-3';
+    toast.innerHTML = '<i class="bi bi-check-circle"></i> Query bookmarked successfully!';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function loadBookmarks() {
+    const bookmarks = getBookmarks();
+    const container = document.getElementById('bookmarksList');
+
+    if (bookmarks.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">No bookmarked queries yet. Run a query and click "Bookmark This Query" to save it.</p>';
+        return;
+    }
+
+    container.innerHTML = bookmarks.map((bookmark, index) => `
+        <div class="card mb-2">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="card-title mb-1">${escapeHtml(bookmark.query)}</h6>
+                        <small class="text-muted">
+                            ${new Date(bookmark.timestamp).toLocaleString()} • ${bookmark.rowCount} rows
+                        </small>
+                        <details class="mt-2">
+                            <summary class="text-primary" style="cursor: pointer;">View SQL</summary>
+                            <pre class="bg-light p-2 mt-2 border rounded" style="font-size: 0.85rem;"><code>${escapeHtml(bookmark.sql)}</code></pre>
+                        </details>
+                    </div>
+                    <div class="btn-group-vertical ms-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadBookmark(${index})" data-bs-dismiss="modal">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteBookmark(${index})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function loadBookmark(index) {
+    const bookmarks = getBookmarks();
+    const bookmark = bookmarks[index];
+
+    if (bookmark) {
+        document.getElementById('queryInput').value = bookmark.query;
+        processQuery();
+    }
+}
+
+function deleteBookmark(index) {
+    if (!confirm('Delete this bookmark?')) return;
+
+    const bookmarks = getBookmarks();
+    bookmarks.splice(index, 1);
+    saveBookmarks(bookmarks);
+}
+
+function clearAllBookmarks() {
+    if (!confirm('Delete ALL bookmarks? This cannot be undone.')) return;
+
+    localStorage.removeItem('aiQueryBookmarks');
+    updateBookmarkCount();
+    loadBookmarks();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function exportAsGoodExample() {
+    if (!currentQueryData) {
+        alert('No query results to export');
+        return;
+    }
+
+    const trainingData = {
+        type: 'good_example',
+        timestamp: new Date().toISOString(),
+        user_query: currentQueryData.query,
+        generated_sql: currentQueryData.sql,
+        sql_execution_success: true,
+        row_count: currentQueryData.rowCount,
+        d3_code: currentQueryData.d3Code,
+        visualization_success: true,
+        notes: 'Marked as good training example by user'
+    };
+
+    downloadJSON(trainingData, `good_example_${Date.now()}.json`);
+}
+
+function exportAsBadExample() {
+    if (!currentQueryData) {
+        alert('No query results to export');
+        return;
+    }
+
+    const reason = prompt('What was wrong with this result? (SQL error, wrong data, bad visualization, etc.)');
+    if (!reason) return;
+
+    const trainingData = {
+        type: 'bad_example',
+        timestamp: new Date().toISOString(),
+        user_query: currentQueryData.query,
+        generated_sql: currentQueryData.sql,
+        sql_execution_success: currentQueryData.rowCount > 0,
+        row_count: currentQueryData.rowCount,
+        d3_code: currentQueryData.d3Code,
+        visualization_success: false,
+        issue_description: reason,
+        notes: 'Marked as bad training example by user'
+    };
+
+    downloadJSON(trainingData, `bad_example_${Date.now()}.json`);
+}
+
+function exportFullResults() {
+    if (!currentQueryData) {
+        alert('No query results to export');
+        return;
+    }
+
+    const fullData = {
+        timestamp: new Date().toISOString(),
+        user_query: currentQueryData.query,
+        phase1_sql_generation: {
+            generated_sql: currentQueryData.sql,
+            ai_response: currentQueryData.sqlAiResponse
+        },
+        phase2_data_retrieval: {
+            row_count: currentQueryData.rowCount,
+            raw_data_sample: currentQueryData.rawDataSample,
+            pivot_data: currentQueryData.pivotData
+        },
+        phase3_visualization: {
+            d3_code: currentQueryData.d3Code,
+            ai_response: currentQueryData.d3AiResponse
+        }
+    };
+
+    downloadJSON(fullData, `full_results_${Date.now()}.json`);
+}
+
+function downloadJSON(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Show success message
+    const toast = document.createElement('div');
+    toast.className = 'alert alert-success position-fixed bottom-0 end-0 m-3';
+    toast.innerHTML = `<i class="bi bi-check-circle"></i> Exported as ${filename}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
 function setQuery(query) {
     document.getElementById('queryInput').value = query;
     document.getElementById('queryInput').focus();
@@ -150,18 +425,18 @@ function copyToClipboard(elementId) {
 
 async function processQuery() {
     const query = document.getElementById('queryInput').value.trim();
-    
+
     if (!query) {
         alert('Please enter a query');
         return;
     }
-    
+
     // Show loading, hide previous results
     document.getElementById('loadingSpinner').classList.remove('d-none');
     document.getElementById('resultsContainer').classList.add('d-none');
     document.getElementById('errorContainer').classList.add('d-none');
     document.getElementById('submitQuery').disabled = true;
-    
+
     try {
         const response = await fetch('/ai-query/process', {
             method: 'POST',
@@ -170,16 +445,28 @@ async function processQuery() {
             },
             body: JSON.stringify({ prompt: query })
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok || !data.success) {
             throw new Error(data.error || 'Unknown error occurred');
         }
-        
+
+        // Store current query data globally
+        currentQueryData = {
+            query: query,
+            sql: data.phase1_sql_generation.sql_query,
+            sqlAiResponse: data.phase1_sql_generation.ai_response,
+            rowCount: data.phase2_data_retrieval.row_count,
+            rawDataSample: data.phase2_data_retrieval.raw_data.slice(0, 100),
+            pivotData: data.phase2_data_retrieval.pivot_data,
+            d3Code: data.phase3_visualization.d3_code,
+            d3AiResponse: data.phase3_visualization.ai_response
+        };
+
         // Display results
         displayResults(data);
-        
+
     } catch (error) {
         displayError(error);
     } finally {
@@ -191,35 +478,35 @@ async function processQuery() {
 function displayResults(data) {
     // Show results container
     document.getElementById('resultsContainer').classList.remove('d-none');
-    
+
     // Phase 1: SQL Generation
     document.getElementById('phase1SQL').textContent = data.phase1_sql_generation.sql_query;
     document.getElementById('phase1Response').textContent = data.phase1_sql_generation.ai_response;
-    
+
     // Phase 2: Data Retrieval
     document.getElementById('phase2RowCount').textContent = data.phase2_data_retrieval.row_count;
-    
+
     // Build data table
     const rawData = data.phase2_data_retrieval.raw_data;
     if (rawData.length > 0) {
         const columns = Object.keys(rawData[0]);
-        
+
         // Table header
         const thead = document.getElementById('phase2TableHead');
         thead.innerHTML = '<tr>' + columns.map(col => `<th>${col}</th>`).join('') + '</tr>';
-        
+
         // Table body (first 100 rows)
         const tbody = document.getElementById('phase2TableBody');
-        tbody.innerHTML = rawData.slice(0, 100).map(row => 
+        tbody.innerHTML = rawData.slice(0, 100).map(row =>
             '<tr>' + columns.map(col => `<td>${row[col]}</td>`).join('') + '</tr>'
         ).join('');
     }
-    
+
     document.getElementById('phase2Pivot').textContent = JSON.stringify(data.phase2_data_retrieval.pivot_data, null, 2);
-    
+
     // Phase 3: Visualization
     document.getElementById('phase3Code').textContent = data.phase3_visualization.d3_code;
-    
+
     // Execute D3 code
     executeD3Code(data.phase3_visualization.d3_code, data.phase2_data_retrieval.pivot_data);
 }
@@ -228,7 +515,7 @@ function executeD3Code(code, data) {
     // Clear previous chart
     const chartDiv = document.getElementById('chart');
     chartDiv.innerHTML = '';
-    
+
     console.log('🎨 Executing D3 visualization code...');
     console.log('Data structure:', data);
     console.log('Code length:', code.length);
@@ -302,6 +589,14 @@ pre code {
 .btn-outline-info:hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+details summary {
+    user-select: none;
+}
+
+details summary:hover {
+    text-decoration: underline;
 }
 </style>
 {% endblock %}

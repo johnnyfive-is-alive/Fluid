@@ -7,6 +7,7 @@ ENHANCEMENTS:
 - Improved handling of monthyear time series data
 - Enhanced data pivoting for multi-line charts
 - Uses enhanced fallback visualizations for all item types
+- FIXED: Avoid COALESCE in GROUP BY (SQLite compatibility)
 
 Installation: pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 """
@@ -250,6 +251,7 @@ class LlamaQueryProcessor:
         1. References it.typename without JOIN itemtypes
         2. Missing table aliases
         3. Invalid SQLite syntax
+        4. COALESCE in GROUP BY (causes token errors)
         """
         import re
 
@@ -276,6 +278,21 @@ class LlamaQueryProcessor:
             sql_query = re.sub(r'\bWHERE\s+typename\b', 'WHERE it.typename', sql_query, flags=re.IGNORECASE)
             print("✅ Changed 'WHERE typename' to 'WHERE it.typename'")
 
+        # CRITICAL FIX: Replace COALESCE in GROUP BY with CASE WHEN
+        # COALESCE with string literals causes "unrecognized token: '" error in SQLite GROUP BY
+        if re.search(r'GROUP BY.*COALESCE', sql_query, re.IGNORECASE | re.DOTALL):
+            print("⚠️  Found COALESCE in GROUP BY - this causes SQLite errors, fixing...")
+
+            # Replace COALESCE(p.itemname, 'UNALLOCATED') with p.itemname
+            # The CASE expression stays in SELECT for display purposes
+            sql_query = re.sub(
+                r'GROUP BY\s+(.*?)COALESCE\([^,]+,\s*["\']UNALLOCATED["\']\)',
+                r'GROUP BY \1p.itemname',
+                sql_query,
+                flags=re.IGNORECASE
+            )
+            print("✅ Replaced COALESCE with column reference in GROUP BY")
+
         return sql_query
 
     def phase1_generate_sql(self, user_prompt: str) -> Dict[str, Any]:
@@ -288,6 +305,7 @@ class LlamaQueryProcessor:
         - monthyear format understanding
         - Product-based loading structure
         - SQL validation and auto-correction
+        - FIXED: Avoid COALESCE in GROUP BY clauses
         """
 
         system_context = f"""SQLite query generator. Use ONLY SQLite syntax.
@@ -303,6 +321,13 @@ CRITICAL SQLITE SYNTAX RULES (NO PostgreSQL):
 5. items has NO fkproduct column - use il.fkproduct from itemloading
 6. Percent is in itemloading: il.percent (NOT i.percent)
 
+CRITICAL: NEVER use COALESCE in GROUP BY clause!
+✅ CORRECT: GROUP BY p.itemname  (group by the actual column)
+❌ WRONG: GROUP BY COALESCE(p.itemname, 'UNALLOCATED')  (causes token error)
+
+For display, use CASE WHEN in SELECT:
+  CASE WHEN p.itemname IS NULL THEN 'UNALLOCATED' ELSE p.itemname END AS product
+
 IMPORTANT: ALWAYS JOIN itemtypes WHEN FILTERING BY TYPE
 - If WHERE clause uses it.typename, you MUST JOIN itemtypes it ON i.fkitemtype = it.id
 - Never reference it.typename without JOIN itemtypes it ON i.fkitemtype = it.id
@@ -314,19 +339,19 @@ When user asks about a SPECIFIC PERSON's usage/loading/time allocation:
 - WRONG: Looking at all items and grouping by product
 - CORRECT: Filter for that specific person, then show their allocation by product
 
-EXAMPLE - "Show me Pavan Eranki month to month use" or "Pavan Eranki usage by product":
+EXAMPLE - "Show Pavan Eranki month to month use" or "Pavan Eranki usage by product":
 ```sql
 SELECT 
   i.itemname,
   il.monthyear,
-  COALESCE(p.itemname, 'UNALLOCATED') AS product,
+  CASE WHEN p.itemname IS NULL THEN 'UNALLOCATED' ELSE p.itemname END AS product,
   il.percent as total_percent
 FROM itemloading il
 JOIN items i ON il.fkitem = i.id
 LEFT JOIN items p ON il.fkproduct = p.id
 WHERE i.itemname LIKE '%Pavan%' OR i.itemname LIKE '%Eranki%'
   AND il.monthyear BETWEEN '2025-01' AND '2025-12'
-ORDER BY il.monthyear, p.itemname
+ORDER BY il.monthyear, product
 ```
 
 DETECTION RULES:
@@ -351,58 +376,26 @@ To filter by specific type (MUST include JOIN):
 
 Item names: STATIONS are uppercase (DV-SPYKER), RESOURCES may be mixed (Gabor Farkas)
 
-LOADING QUERIES:
-- For item loading: JOIN itemloading il ON il.fkitem = i.id
-- For products: JOIN items p ON il.fkproduct = p.id (product is in items table with typename='PRODUCT')
-- UNALLOCATED: il.fkproduct IS NULL or p.itemname = 'UNALLOCATED'
-- Always JOIN itemtypes if you need typename in SELECT or WHERE
-
-EXAMPLE 1 - Resource loading by month (all resources):
+LOADING QUERIES WITH PRODUCTS:
 ```sql
 SELECT 
   i.itemname,
-  it.typename,
   il.monthyear,
-  SUM(il.percent) as total_loading
-FROM itemloading il
-JOIN items i ON il.fkitem = i.id
-JOIN itemtypes it ON i.fkitemtype = it.id
-WHERE it.typename = 'RESOURCE'
-  AND il.monthyear BETWEEN '2025-01' AND '2025-12'
-GROUP BY i.itemname, it.typename, il.monthyear
-ORDER BY i.itemname, il.monthyear
-```
-
-EXAMPLE 2 - Specific person's allocation (Pavan Eranki):
-```sql
-SELECT 
-  il.monthyear,
-  COALESCE(p.itemname, 'UNALLOCATED') AS product,
-  il.percent as total_percent
+  CASE WHEN p.itemname IS NULL THEN 'UNALLOCATED' ELSE p.itemname END AS product,
+  SUM(il.percent) as total_percent
 FROM itemloading il
 JOIN items i ON il.fkitem = i.id
 LEFT JOIN items p ON il.fkproduct = p.id
-WHERE i.itemname LIKE '%Pavan%' OR i.itemname LIKE '%Eranki%'
-ORDER BY il.monthyear, p.itemname
-```
-
-EXAMPLE 3 - All items loading (no type filter):
-```sql
-SELECT 
-  i.itemname,
-  il.monthyear,
-  SUM(il.percent) as total_loading
-FROM itemloading il
-JOIN items i ON il.fkitem = i.id
 WHERE il.monthyear BETWEEN '2025-01' AND '2025-12'
-GROUP BY i.itemname, il.monthyear
-ORDER BY i.itemname, il.monthyear
+GROUP BY i.itemname, il.monthyear, p.itemname
+ORDER BY i.itemname, il.monthyear, product
 ```
 
-REMEMBER: 
-- Person name in query → Filter WHERE i.itemname LIKE '%Name%'
-- "all resources" → Filter WHERE it.typename = 'RESOURCE' (must JOIN itemtypes)
-- If you reference it.typename ANYWHERE, you MUST JOIN itemtypes!
+IMPORTANT NOTES:
+- For products: JOIN items p ON il.fkproduct = p.id (product is in items table with typename='PRODUCT')
+- UNALLOCATED: il.fkproduct IS NULL or p.itemname = 'UNALLOCATED'
+- Always JOIN itemtypes if you need typename in SELECT or WHERE
+- Use CASE WHEN for NULL handling in SELECT, NOT COALESCE in GROUP BY
 
 Return ONLY SQL in ```sql blocks."""
 
