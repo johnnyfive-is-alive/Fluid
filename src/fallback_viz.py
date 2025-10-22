@@ -94,6 +94,17 @@ def generate_stacked_area_or_grouped_bars(time_col: str, group_col: str, value_c
     Generate a stacked area chart for person/resource allocation across products.
     Perfect for queries like "Show Pavan usage month to month by product".
     """
+
+    # Detect if this is a station/item usage query (should use grouped bars)
+    is_station_query = (
+            'station' in user_prompt.lower() or
+            ('used' in user_prompt.lower() and ('month' in user_prompt.lower() or 'product' in user_prompt.lower()))
+    )
+
+    # If it's a station query, generate grouped bars instead
+    if is_station_query:
+        return generate_grouped_bar_chart(time_col, group_col, value_col, user_prompt)
+
     title_name = resource_name if resource_name else "Resource"
 
     # Create the title text in Python to avoid JavaScript string escaping issues
@@ -225,6 +236,162 @@ svg.append('text')
   .text('Monthly distribution across products');
 
 console.log('Stacked area chart rendered');
+"""
+
+def generate_grouped_bar_chart(time_col: str, group_col: str, value_col: str, user_prompt: str = "") -> str:
+    """
+    Generate a grouped bar chart showing items/stations month by month, grouped by product.
+    Perfect for queries like "show me how stations are used month to month by product".
+    """
+    return f"""
+console.log('Rendering grouped bar chart for station usage...');
+const margin = {{top: 80, right: 180, bottom: 100, left: 90}};
+const width = Math.max(900, document.getElementById('chart').clientWidth) - margin.left - margin.right;
+const height = 600 - margin.top - margin.bottom;
+
+const svg = d3.select('#chart')
+  .html('')
+  .append('svg')
+  .attr('width', width + margin.left + margin.right)
+  .attr('height', height + margin.top + margin.bottom)
+  .append('g')
+  .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+const data = window.chartData;
+const months = [...new Set(data.map(d => d['{time_col}']))].sort();
+const products = [...new Set(data.map(d => d['{group_col}']))].sort();
+
+const colorScale = d3.scaleOrdinal()
+  .domain(products)
+  .range(['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a']);
+
+// Create x scale for months
+const x0 = d3.scaleBand()
+  .domain(months)
+  .range([0, width])
+  .padding(0.2);
+
+// Create x scale for products within each month
+const x1 = d3.scaleBand()
+  .domain(products)
+  .range([0, x0.bandwidth()])
+  .padding(0.05);
+
+const maxY = d3.max(data, d => d['{value_col}']) || 100;
+
+const y = d3.scaleLinear()
+  .domain([0, maxY])
+  .nice()
+  .range([height, 0]);
+
+// Add X axis
+svg.append('g')
+  .attr('transform', 'translate(0,' + height + ')')
+  .call(d3.axisBottom(x0))
+  .selectAll('text')
+  .attr('transform', 'rotate(-45)')
+  .style('text-anchor', 'end');
+
+// Add Y axis
+svg.append('g')
+  .call(d3.axisLeft(y));
+
+// Add X axis label
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', height + 75)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '14px')
+  .text('Month');
+
+// Add Y axis label
+svg.append('text')
+  .attr('transform', 'rotate(-90)')
+  .attr('x', -height / 2)
+  .attr('y', -65)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '14px')
+  .style('font-weight', 'bold')
+  .text('Usage (%)');
+
+// Create grouped bars
+const monthGroups = svg.selectAll('.month-group')
+  .data(months)
+  .join('g')
+  .attr('class', 'month-group')
+  .attr('transform', d => 'translate(' + x0(d) + ',0)');
+
+products.forEach((product, productIdx) => {{
+  monthGroups.selectAll('.bar-' + productIdx)
+    .data(month => {{
+      const record = data.find(d => d['{time_col}'] === month && d['{group_col}'] === product);
+      return [{{
+        month: month,
+        product: product,
+        value: record ? record['{value_col}'] : 0
+      }}];
+    }})
+    .join('rect')
+    .attr('class', 'bar-' + productIdx)
+    .attr('x', d => x1(d.product))
+    .attr('y', height)
+    .attr('width', x1.bandwidth())
+    .attr('height', 0)
+    .attr('fill', colorScale(product))
+    .attr('opacity', 0.8)
+    .style('cursor', 'pointer')
+    .on('mouseover', function(event, d) {{
+      d3.select(this).attr('opacity', 1);
+    }})
+    .on('mouseout', function(event, d) {{
+      d3.select(this).attr('opacity', 0.8);
+    }})
+    .transition()
+    .duration(1200)
+    .delay((d, i) => productIdx * 100 + i * 80)
+    .attr('y', d => y(d.value))
+    .attr('height', d => height - y(d.value));
+}});
+
+// Add legend
+const legend = svg.append('g')
+  .attr('transform', 'translate(' + (width + 30) + ', 0)');
+
+products.forEach(function(product, i) {{
+  const legendRow = legend.append('g')
+    .attr('transform', 'translate(0, ' + (i * 30) + ')')
+    .style('cursor', 'pointer');
+
+  legendRow.append('rect')
+    .attr('width', 20)
+    .attr('height', 20)
+    .attr('fill', colorScale(product));
+
+  legendRow.append('text')
+    .attr('x', 25)
+    .attr('y', 15)
+    .text(product);
+}});
+
+// Add title
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', -40)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '20px')
+  .style('font-weight', 'bold')
+  .text('Station Usage by Product and Month');
+
+// Add subtitle
+svg.append('text')
+  .attr('x', width / 2)
+  .attr('y', -20)
+  .attr('text-anchor', 'middle')
+  .style('font-size', '14px')
+  .style('fill', '#666')
+  .text('Monthly station allocation across products');
+
+console.log('Grouped bar chart rendered');
 """
 
 def generate_multi_line_chart(time_col: str, item_col: str, value_col: str) -> str:
