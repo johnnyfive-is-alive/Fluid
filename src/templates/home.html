@@ -8,13 +8,12 @@ Manage your resources, stations, products,and loading allocations in one place.
 </p>
 </div>
 
-<!-- Quick navigation cards -->
-<div class="row g-4">
-
+<!-- Quick navigation cards - Centered in one column -->
+<div class="row justify-content-center">
+<div class="col-12 col-md-10 col-lg-8">
 
 <!-- Items card -->
-<div class="col-md-6 col-lg-4">
-<div class="card h-100 border-success">
+<div class="card border-success mb-4">
 <div class="card-body">
 <h5 class="card-title">
     <i class="bi bi-box text-success"></i> Staff, Stations, or Units
@@ -30,11 +29,9 @@ Add Item
 </a>
 </div>
 </div>
-</div>
 
 <!-- Products card -->
-<div class="col-md-6 col-lg-4">
-<div class="card h-100 border-info">
+<div class="card border-info mb-4">
 <div class="card-body">
 <h5 class="card-title">
     <i class="bi bi-basket text-info"></i> Products
@@ -50,11 +47,9 @@ Add Product
 </a>
 </div>
 </div>
-</div>
 
 <!-- Characteristics card -->
-<div class="col-md-6 col-lg-4">
-<div class="card h-100 border-warning">
+<div class="card border-warning mb-4">
 <div class="card-body">
 <h5 class="card-title">
     <i class="bi bi-tags text-warning"></i> Characteristics
@@ -71,11 +66,9 @@ Add Characteristic
 </a>
 </div>
 </div>
-</div>
 
 <!-- Loading Grid card -->
-<div class="col-md-6 col-lg-4">
-<div class="card h-100 border-danger">
+<div class="card border-danger mb-4">
 <div class="card-body">
 <h5 class="card-title">
     <i class="bi bi-grid-3x3 text-danger"></i> Allocations
@@ -88,66 +81,7 @@ Open Grid
 </a>
 </div>
 </div>
-</div>
-</div>
 
-<!-- Getting Started guide -->
-<div class="card mt-4 border-primary">
-<div class="card-header bg-primary text-white">
-<h5 class="mb-0">
-    <i class="bi bi-rocket"></i> Getting Started
-</h5>
-</div>
-<div class="card-body">
-<ol class="mb-0">
-<li class="mb-2">
-<strong>Add Items:</strong> Create items and assign them to types (stations, resources, etc.)
-</li>
-<li class="mb-2">
-<strong>Add Products:</strong> Define products that represent what your items work on
-</li>
-<li class="mb-2">
-<strong>Map Products to Items:</strong> Specify which items can work on which products
-</li>
-<li class="mb-2">
-<strong>Add Characteristics:</strong> Describe your items with key-value properties (optional)
-</li>
-<li>
-<strong>Set Loading Allocations:</strong> Use the grid to manage monthly loading by product
-</li>
-</ol>
-</div>
-</div>
-
-<!-- Database structure info -->
-<div class="row mt-4">
-<div class="col-md-6">
-
-</div>
-
-<div class="col-md-6">
-
-</div>
-</div>
-
-<!-- Example scenario -->
-<div class="card mt-4 bg-light">
-<div class="card-body">
-<h5 class="card-title">
-    <i class="bi bi-lightbulb"></i> Example Scenario
-</h5>
-<p class="mb-2">
-<strong>Station DV-SPYKER</strong> in <strong>September 2025</strong>:
-</p>
-<ul class="mb-2">
-<li>50% allocated to <span class="badge bg-info">BEEHIVE 300G</span></li>
-<li>50% allocated to <span class="badge bg-info">GENERIC 300L</span></li>
-<li>0% <span class="badge bg-secondary">INACTIVE</span> (fully utilized)</li>
-</ul>
-<p class="text-muted mb-0">
-This flexible allocation model lets you track exactly what each item is working on,
-month by month, making capacity planning and resource optimization much easier.
-</p>
 </div>
 </div>
 {% endblock %}

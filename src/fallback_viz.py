@@ -1,5 +1,6 @@
 """
 D3.js visualization generator matching Chart.js stacked bar chart style.
+Enhanced with larger, clearer font sizes for better readability.
 """
 import re
 
@@ -37,7 +38,7 @@ def generate_stacked_bar_d3(time_col: str, group_col: str, value_col: str,
 
     return f"""
 console.log('Rendering D3.js stacked bar chart...');
-const margin = {{top: 80, right: 180, bottom: 100, left: 90}};
+const margin = {{top: 80, right: 180, bottom: 120, left: 100}};
 const width = Math.max(900, document.getElementById('chart').clientWidth) - margin.left - margin.right;
 const height = 600 - margin.top - margin.bottom;
 
@@ -98,27 +99,34 @@ svg.append('g')
   .call(d3.axisBottom(x))
   .selectAll('text')
   .attr('transform', 'rotate(-45)')
-  .style('text-anchor', 'end');
+  .style('text-anchor', 'end')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
 const yAxis = d3.axisLeft(y)
   .tickFormat(d => d + '%');
 
 svg.append('g')
-  .call(yAxis);
+  .call(yAxis)
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
 svg.append('text')
   .attr('x', width / 2)
-  .attr('y', height + 70)
+  .attr('y', height + 85)
   .attr('text-anchor', 'middle')
-  .style('font-size', '14px')
+  .style('font-size', '18px')
+  .style('font-weight', 'bold')
   .text('Month');
 
 svg.append('text')
   .attr('transform', 'rotate(-90)')
-  .attr('y', -60)
+  .attr('y', -70)
   .attr('x', -height / 2)
   .attr('text-anchor', 'middle')
-  .style('font-size', '14px')
+  .style('font-size', '18px')
+  .style('font-weight', 'bold')
   .text('Allocation %');
 
 series.forEach((productData, idx) => {{
@@ -142,9 +150,10 @@ series.forEach((productData, idx) => {{
         .style('position', 'absolute')
         .style('background', 'rgba(0,0,0,0.8)')
         .style('color', 'white')
-        .style('padding', '8px')
+        .style('padding', '10px')
         .style('border-radius', '4px')
         .style('pointer-events', 'none')
+        .style('font-size', '14px')
         .style('left', event.pageX + 10 + 'px')
         .style('top', event.pageY - 10 + 'px')
         .html(productData.key + ': ' + value.toFixed(1) + '%');
@@ -165,25 +174,26 @@ const legend = svg.append('g')
 
 products.forEach((product, i) => {{
   const legendRow = legend.append('g')
-    .attr('transform', 'translate(0, ' + (i * 30) + ')');
+    .attr('transform', 'translate(0, ' + (i * 35) + ')');
 
   legendRow.append('rect')
-    .attr('width', 20)
-    .attr('height', 20)
+    .attr('width', 22)
+    .attr('height', 22)
     .attr('fill', colorScale(product));
 
   legendRow.append('text')
-    .attr('x', 25)
-    .attr('y', 15)
-    .style('font-size', '14px')
+    .attr('x', 28)
+    .attr('y', 16)
+    .style('font-size', '16px')
+    .style('font-weight', '500')
     .text(product);
 }});
 
 svg.append('text')
   .attr('x', width / 2)
-  .attr('y', -40)
+  .attr('y', -45)
   .attr('text-anchor', 'middle')
-  .style('font-size', '18px')
+  .style('font-size', '22px')
   .style('font-weight', 'bold')
   .text({title_js});
 
@@ -201,7 +211,7 @@ def generate_grouped_bar_chart(time_col: str, group_col: str, value_col: str, us
     """Grouped bar chart for non-loading queries."""
     return f"""
 console.log('Rendering grouped bar chart...');
-const margin = {{top: 80, right: 200, bottom: 100, left: 90}};
+const margin = {{top: 80, right: 200, bottom: 120, left: 100}};
 const width = Math.max(900, document.getElementById('chart').clientWidth) - margin.left - margin.right;
 const height = 600 - margin.top - margin.bottom;
 
@@ -241,9 +251,15 @@ svg.append('g')
   .call(d3.axisBottom(x0))
   .selectAll('text')
   .attr('transform', 'rotate(-45)')
-  .style('text-anchor', 'end');
+  .style('text-anchor', 'end')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
-svg.append('g').call(d3.axisLeft(y));
+svg.append('g')
+  .call(d3.axisLeft(y))
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
 products.forEach(function(product, productIdx) {{
   svg.selectAll('.bar-' + productIdx)
@@ -263,9 +279,9 @@ products.forEach(function(product, productIdx) {{
 
 svg.append('text')
   .attr('x', width / 2)
-  .attr('y', -40)
+  .attr('y', -45)
   .attr('text-anchor', 'middle')
-  .style('font-size', '20px')
+  .style('font-size', '22px')
   .style('font-weight', 'bold')
   .text('Usage by Product and Month');
 
@@ -277,7 +293,7 @@ def generate_multi_line_chart(time_col: str, item_col: str, value_col: str) -> s
     """Multi-line chart for comparing multiple items."""
     return f"""
 console.log('Rendering multi-line chart...');
-const margin = {{top: 80, right: 200, bottom: 100, left: 80}};
+const margin = {{top: 80, right: 220, bottom: 120, left: 100}};
 const width = Math.max(800, document.getElementById('chart').clientWidth) - margin.left - margin.right;
 const height = 600 - margin.top - margin.bottom;
 
@@ -312,9 +328,15 @@ svg.append('g')
   .call(d3.axisBottom(x))
   .selectAll('text')
   .attr('transform', 'rotate(-45)')
-  .style('text-anchor', 'end');
+  .style('text-anchor', 'end')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
-svg.append('g').call(d3.axisLeft(y));
+svg.append('g')
+  .call(d3.axisLeft(y))
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
 const line = d3.line()
   .x(d => x(d['{time_col}']))
@@ -337,16 +359,20 @@ const legend = svg.append('g')
 
 itemNames.forEach(function(itemName, i) {{
   const legendRow = legend.append('g')
-    .attr('transform', 'translate(0, ' + (i * 30) + ')');
+    .attr('transform', 'translate(0, ' + (i * 35) + ')');
   legendRow.append('line')
-    .attr('x1', 0).attr('x2', 20).attr('y1', 10).attr('y2', 10)
+    .attr('x1', 0).attr('x2', 25).attr('y1', 12).attr('y2', 12)
     .attr('stroke', colorScale(itemName)).attr('stroke-width', 3);
-  legendRow.append('text').attr('x', 25).attr('y', 15).text(itemName);
+  legendRow.append('text')
+    .attr('x', 30).attr('y', 17)
+    .style('font-size', '16px')
+    .style('font-weight', '500')
+    .text(itemName);
 }});
 
 svg.append('text')
-  .attr('x', width / 2).attr('y', -40).attr('text-anchor', 'middle')
-  .style('font-size', '20px').style('font-weight', 'bold')
+  .attr('x', width / 2).attr('y', -45).attr('text-anchor', 'middle')
+  .style('font-size', '22px').style('font-weight', 'bold')
   .text('Loading Over Time');
 """
 
@@ -354,7 +380,7 @@ svg.append('text')
 def generate_enhanced_line_chart(time_col: str, value_col: str) -> str:
     """Simple line chart."""
     return f"""
-const margin = {{top: 60, right: 50, bottom: 80, left: 80}};
+const margin = {{top: 70, right: 50, bottom: 100, left: 100}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
@@ -367,8 +393,18 @@ const data = window.chartData.sort((a, b) => a['{time_col}'].localeCompare(b['{t
 const x = d3.scalePoint().domain(data.map(d => d['{time_col}'])).range([0, width]).padding(0.5);
 const y = d3.scaleLinear().domain([0, d3.max(data, d => d['{value_col}']) || 100]).nice().range([height, 0]);
 
-svg.append('g').attr('transform', 'translate(0,' + height + ')').call(d3.axisBottom(x));
-svg.append('g').call(d3.axisLeft(y));
+svg.append('g')
+  .attr('transform', 'translate(0,' + height + ')')
+  .call(d3.axisBottom(x))
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
+
+svg.append('g')
+  .call(d3.axisLeft(y))
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
 const line = d3.line().x(d => x(d['{time_col}'])).y(d => y(d['{value_col}'])).curve(d3.curveMonotoneX);
 svg.append('path').datum(data).attr('fill', 'none').attr('stroke', 'steelblue').attr('stroke-width', 3).attr('d', line);
@@ -378,7 +414,7 @@ svg.append('path').datum(data).attr('fill', 'none').attr('stroke', 'steelblue').
 def generate_enhanced_bar_chart(cat_col: str, num_col: str) -> str:
     """Bar chart."""
     return f"""
-const margin = {{top: 60, right: 40, bottom: 100, left: 80}};
+const margin = {{top: 70, right: 40, bottom: 120, left: 100}};
 const width = document.getElementById('chart').clientWidth - margin.left - margin.right;
 const height = 500 - margin.top - margin.bottom;
 
@@ -391,9 +427,20 @@ const data = window.chartData;
 const x = d3.scaleBand().domain(data.map(d => d['{cat_col}'])).range([0, width]).padding(0.3);
 const y = d3.scaleLinear().domain([0, d3.max(data, d => d['{num_col}']) || 100]).nice().range([height, 0]);
 
-svg.append('g').attr('transform', 'translate(0,' + height + ')').call(d3.axisBottom(x))
-  .selectAll('text').attr('transform', 'rotate(-45)').style('text-anchor', 'end');
-svg.append('g').call(d3.axisLeft(y));
+svg.append('g')
+  .attr('transform', 'translate(0,' + height + ')')
+  .call(d3.axisBottom(x))
+  .selectAll('text')
+  .attr('transform', 'rotate(-45)')
+  .style('text-anchor', 'end')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
+
+svg.append('g')
+  .call(d3.axisLeft(y))
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
 
 svg.selectAll('.bar').data(data).join('rect')
   .attr('x', d => x(d['{cat_col}'])).attr('y', d => y(d['{num_col}']))
@@ -405,14 +452,26 @@ svg.selectAll('.bar').data(data).join('rect')
 def generate_enhanced_scatter_plot(x_col: str, y_col: str) -> str:
     """Scatter plot."""
     return f"""
-const margin = {{top: 60, right: 50, bottom: 80, left: 80}};
+const margin = {{top: 70, right: 50, bottom: 100, left: 100}};
 const svg = d3.select('#chart').html('').append('svg').attr('width', 800).attr('height', 600)
   .append('g').attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
 const data = window.chartData;
 const x = d3.scaleLinear().domain(d3.extent(data, d => d['{x_col}'])).nice().range([0, 600]);
 const y = d3.scaleLinear().domain(d3.extent(data, d => d['{y_col}'])).nice().range([400, 0]);
-svg.append('g').attr('transform', 'translate(0,400)').call(d3.axisBottom(x));
-svg.append('g').call(d3.axisLeft(y));
+
+svg.append('g')
+  .attr('transform', 'translate(0,400)')
+  .call(d3.axisBottom(x))
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
+
+svg.append('g')
+  .call(d3.axisLeft(y))
+  .selectAll('text')
+  .style('font-size', '16px')
+  .style('font-weight', '500');
+
 svg.selectAll('circle').data(data).join('circle')
   .attr('cx', d => x(d['{x_col}'])).attr('cy', d => y(d['{y_col}']))
   .attr('r', 6).attr('fill', 'steelblue').attr('opacity', 0.7);

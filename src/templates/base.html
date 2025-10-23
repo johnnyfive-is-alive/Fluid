@@ -134,5 +134,24 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Global Chart.js configuration for larger, clearer fonts
+if (typeof Chart !== 'undefined') {
+    Chart.defaults.font.size = 16;
+    Chart.defaults.font.weight = '500';
+
+    Chart.defaults.plugins.title.font.size = 20;
+    Chart.defaults.plugins.title.font.weight = 'bold';
+
+    Chart.defaults.plugins.legend.labels.font.size = 16;
+    Chart.defaults.plugins.legend.labels.font.weight = '500';
+
+    Chart.defaults.scales.linear.ticks.font.size = 16;
+    Chart.defaults.scales.linear.ticks.font.weight = '500';
+
+    Chart.defaults.scales.category.ticks.font.size = 16;
+    Chart.defaults.scales.category.ticks.font.weight = '500';
+}
+</script>
 </body>
 </html>
