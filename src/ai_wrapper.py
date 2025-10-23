@@ -245,151 +245,83 @@ class LlamaQueryProcessor:
 
         return ai_response.strip()
 
-    def _validate_and_fix_sql(self, sql_query: str) -> str:
-        """
-        Validate and auto-fix common SQL errors.
+    # Add this method to ai_wrapper.py - replaces _validate_and_fix_sql method
 
-        Common issues:
-        1. References it.typename without JOIN itemtypes
-        2. Missing table aliases
-        3. Invalid SQLite syntax
-        4. COALESCE in GROUP BY (causes token errors)
-        5. Wrong column names (i.itemtype should be i.fkitemtype)
-        6. Inefficient subqueries for itemtype filtering
-        7. Product queries filtering on i.itemname instead of p.itemname
-        """
+    def _validate_and_fix_sql(self, sql_query: str) -> str:
+        """Validate and auto-fix common SQL errors."""
         import re
 
-        # FIX 1: Replace incorrect column reference i.itemtype with i.fkitemtype
+        # FIX 1: Replace i.itemtype with i.fkitemtype
         if re.search(r'\bi\.itemtype\b', sql_query, re.IGNORECASE):
-            print("⚠️  Found i.itemtype (incorrect column name) - fixing to i.fkitemtype...")
+            print("⚠️  Found i.itemtype - fixing to i.fkitemtype...")
             sql_query = re.sub(r'\bi\.itemtype\b', 'i.fkitemtype', sql_query, flags=re.IGNORECASE)
-            print("✅ Changed 'i.itemtype' to 'i.fkitemtype'")
 
-        # FIX 2: Detect product queries that should filter on p.itemname, not i.itemname
-        # Common product names: BEEHIVE, GENERIC, VHAGAR, R64-72, etc. (UPPERCASE)
-        product_pattern = r"WHERE\s+i\.itemname\s+LIKE\s+'%([A-Z][A-Z0-9\s\-]+)%'"
-        match = re.search(product_pattern, sql_query, re.IGNORECASE)
+        # FIX 2: Improve name matching for all staff
+        # Look for WHERE clauses with partial name matching that are too restrictive
+        # Example: WHERE i.itemname LIKE '%Pavan%' OR i.itemname LIKE '%Eranki%'
+        # Problem: Only works for "Pavan Eranki", not "John Smith" or single names
+
+        # Find patterns like: WHERE i.itemname LIKE '%Name%' OR i.itemname LIKE '%Name2%'
+        multi_like_pattern = r"WHERE\s+i\.itemname\s+LIKE\s+'%([^%']+)%'\s+OR\s+i\.itemname\s+LIKE\s+'%([^%']+)%'"
+        match = re.search(multi_like_pattern, sql_query, re.IGNORECASE)
 
         if match:
-            product_keyword = match.group(1)
-            # Check if this looks like a product name (all uppercase, common product keywords)
-            product_keywords = ['BEEHIVE', 'GENERIC', 'VHAGAR', 'R64', 'R72', 'OCM']
+            name1, name2 = match.group(1), match.group(2)
+            # Combine into single LIKE for partial match of full name
+            combined_pattern = f"{name1}%{name2}"
+            print(f"⚠️  Improving name search from '{name1}' OR '{name2}' to flexible match...")
 
-            if any(keyword in product_keyword.upper() for keyword in product_keywords):
-                print(f"⚠️  Found product query filtering on i.itemname (should be p.itemname)")
-                print(f"    Product keyword: {product_keyword}")
+            # Replace with a single flexible LIKE that matches any part
+            replacement = f"WHERE (i.itemname LIKE '%{name1}%' OR i.itemname LIKE '%{name2}%' OR i.itemname LIKE '%{name1} {name2}%' OR i.itemname LIKE '%{name2} {name1}%')"
+            sql_query = re.sub(multi_like_pattern, replacement, sql_query, flags=re.IGNORECASE)
 
-                # Replace WHERE i.itemname LIKE '%PRODUCT%' with WHERE p.itemname LIKE '%PRODUCT%'
-                sql_query = re.sub(
-                    r"WHERE\s+i\.itemname\s+LIKE\s+'%([^']+)%'",
-                    r"WHERE p.itemname LIKE '%\1%'",
-                    sql_query,
-                    flags=re.IGNORECASE
-                )
-                print(f"✅ Changed filter from i.itemname to p.itemname")
+        # FIX 3: Single name searches - make them work for first or last names
+        # Example: WHERE i.itemname LIKE '%John%' should also find "John Smith"
+        single_like_pattern = r"WHERE\s+i\.itemname\s+LIKE\s+'%([^%']+)%'"
+        if re.search(single_like_pattern, sql_query, re.IGNORECASE) and not match:
+            # This is already good - single LIKE works for partial matches
+            pass
 
-                # Also ensure we're filtering by station type if not already present
-                if not re.search(r"it\.typename\s*=\s*['\"]STATION['\"]", sql_query, re.IGNORECASE):
-                    print("⚠️  Adding STATION type filter for product query...")
+        # FIX 4: Remove COALESCE from GROUP BY
+        coalesce_in_group = re.search(
+            r'GROUP BY.*?COALESCE\([^)]+\)',
+            sql_query,
+            re.IGNORECASE | re.DOTALL
+        )
+        if coalesce_in_group:
+            print("⚠️  Found COALESCE in GROUP BY - fixing...")
+            sql_query = re.sub(
+                r'(GROUP BY.*?)COALESCE\([^,]+,\s*["\']UNALLOCATED["\']\)',
+                r'\1p.itemname',
+                sql_query,
+                flags=re.IGNORECASE
+            )
 
-                    # Add JOIN itemtypes if not present
-                    if not re.search(r'JOIN\s+itemtypes\s+it\s+ON', sql_query, re.IGNORECASE):
-                        items_join = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\n]+)', sql_query, re.IGNORECASE)
-                        if items_join:
-                            insert_pos = items_join.end()
-                            join_clause = "\n  JOIN itemtypes it ON i.fkitemtype = it.id"
-                            sql_query = sql_query[:insert_pos] + join_clause + sql_query[insert_pos:]
-                            print("✅ Added: JOIN itemtypes it ON i.fkitemtype = it.id")
-
-                    # Add typename filter to WHERE clause
-                    where_match = re.search(r'(WHERE\s+p\.itemname[^\n]+)', sql_query, re.IGNORECASE)
-                    if where_match:
-                        insert_pos = where_match.end()
-                        sql_query = sql_query[:insert_pos] + "\n  AND it.typename = 'STATION'" + sql_query[insert_pos:]
-                        print("✅ Added: AND it.typename = 'STATION'")
-
-        # FIX 3: Incorrect subquery pattern for filtering by item type
-        # WRONG: WHERE i.fkitemtype = (SELECT id FROM itemtypes WHERE it.typename = 'RESOURCE')
-        # RIGHT: JOIN itemtypes it ON i.fkitemtype = it.id WHERE it.typename = 'RESOURCE'
+        # FIX 5: Convert subquery itemtype filters to JOINs
         subquery_pattern = r'WHERE\s+i\.fkitemtype\s*=\s*\(\s*SELECT\s+id\s+FROM\s+itemtypes\s+WHERE\s+\w+\.typename\s*=\s*["\'](\w+)["\']\s*\)'
         match = re.search(subquery_pattern, sql_query, re.IGNORECASE)
 
         if match:
-            print("⚠️  Found subquery for itemtype filter - converting to JOIN...")
             typename = match.group(1)
+            print(f"⚠️  Converting itemtype subquery to JOIN for '{typename}'...")
 
-            # Remove the WHERE clause with subquery
+            # Remove subquery WHERE clause
             sql_query = re.sub(subquery_pattern, '', sql_query, flags=re.IGNORECASE)
 
-            # Add JOIN itemtypes if not already present
-            if not re.search(r'JOIN\s+itemtypes\s+it\s+ON', sql_query, re.IGNORECASE):
-                # Add JOIN after items join
-                items_join_match = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\n]+)', sql_query, re.IGNORECASE)
-                if items_join_match:
-                    insert_pos = items_join_match.end()
-                    join_clause = f"\n  JOIN itemtypes it ON i.fkitemtype = it.id"
-                    sql_query = sql_query[:insert_pos] + join_clause + sql_query[insert_pos:]
-                    print("✅ Added: JOIN itemtypes it ON i.fkitemtype = it.id")
-
-            # Add WHERE clause for typename
-            # Find WHERE clause or add one before GROUP BY/ORDER BY
-            if re.search(r'\bWHERE\b', sql_query, re.IGNORECASE):
-                # Add to existing WHERE clause
-                # Find the WHERE keyword and add condition after it
-                where_match = re.search(r'(\bWHERE\b\s*)', sql_query, re.IGNORECASE)
-                if where_match:
-                    insert_pos = where_match.end()
-                    sql_query = sql_query[:insert_pos] + f"it.typename = '{typename}' AND " + sql_query[insert_pos:]
-                    print(f"✅ Added typename filter: it.typename = '{typename}'")
-            else:
-                # Add new WHERE clause before GROUP BY or ORDER BY
-                group_or_order = re.search(r'\b(GROUP BY|ORDER BY)\b', sql_query, re.IGNORECASE)
-                if group_or_order:
-                    insert_pos = group_or_order.start()
-                    sql_query = sql_query[:insert_pos] + f"WHERE it.typename = '{typename}'\n" + sql_query[insert_pos:]
-                else:
-                    # Add at end before semicolon
-                    sql_query = sql_query.rstrip(';').rstrip() + f"\nWHERE it.typename = '{typename}';"
-                print(f"✅ Added typename filter: it.typename = '{typename}'")
-
-        # FIX 4: Check if query references it.typename without proper JOIN
-        if re.search(r'\bit\.typename\b', sql_query, re.IGNORECASE):
-            # Check if itemtypes is properly joined
-            if not re.search(r'JOIN\s+itemtypes\s+it\s+ON', sql_query, re.IGNORECASE):
-                print("⚠️  Found it.typename without JOIN itemtypes - attempting to fix...")
-
-                # Try to auto-fix: add the JOIN after items join
+            # Add JOIN itemtypes if not exists
+            if not re.search(r'JOIN\s+itemtypes', sql_query, re.IGNORECASE):
                 items_join = re.search(r'(JOIN\s+items\s+i\s+ON\s+[^\n]+)', sql_query, re.IGNORECASE)
                 if items_join:
                     insert_pos = items_join.end()
-                    join_clause = "\n  JOIN itemtypes it ON i.fkitemtype = it.id"
+                    join_clause = f"\n  JOIN itemtypes it ON i.fkitemtype = it.id"
                     sql_query = sql_query[:insert_pos] + join_clause + sql_query[insert_pos:]
-                    print("✅ Auto-added: JOIN itemtypes it ON i.fkitemtype = it.id")
-                else:
-                    print("❌ Could not auto-fix - manual correction needed")
 
-        # FIX 5: Check for WHERE typename without it. alias
-        if re.search(r'WHERE\s+typename\s*=', sql_query, re.IGNORECASE) and \
-           not re.search(r'WHERE\s+it\.typename\s*=', sql_query, re.IGNORECASE):
-            print("⚠️  Found WHERE typename without alias - fixing...")
-            sql_query = re.sub(r'\bWHERE\s+typename\b', 'WHERE it.typename', sql_query, flags=re.IGNORECASE)
-            print("✅ Changed 'WHERE typename' to 'WHERE it.typename'")
-
-        # FIX 6: CRITICAL - Replace COALESCE in GROUP BY
-        # COALESCE with string literals causes "unrecognized token: '" error in SQLite GROUP BY
-        if re.search(r'GROUP BY.*COALESCE', sql_query, re.IGNORECASE | re.DOTALL):
-            print("⚠️  Found COALESCE in GROUP BY - this causes SQLite errors, fixing...")
-
-            # Replace COALESCE(p.itemname, 'UNALLOCATED') with p.itemname
-            # The CASE expression stays in SELECT for display purposes
-            sql_query = re.sub(
-                r'GROUP BY\s+(.*?)COALESCE\([^,]+,\s*["\']UNALLOCATED["\']\)',
-                r'GROUP BY \1p.itemname',
-                sql_query,
-                flags=re.IGNORECASE
-            )
-            print("✅ Replaced COALESCE with column reference in GROUP BY")
+            # Add WHERE typename filter
+            if 'WHERE' in sql_query.upper():
+                sql_query = re.sub(r'WHERE\s+', f'WHERE it.typename = \'{typename}\' AND ', sql_query, count=1,
+                                   flags=re.IGNORECASE)
+            else:
+                sql_query = sql_query.rstrip() + f"\nWHERE it.typename = '{typename}'"
 
         return sql_query
 
