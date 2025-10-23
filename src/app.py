@@ -77,6 +77,7 @@ def create_app() -> Flask:
     from blueprints.resources import bp as resources_bp
     from blueprints.stations import bp as stations_bp
     from blueprints.units import bp as units_bp
+    from blueprints.availability import bp as availability_bp
     from blueprints.ai_query import bp as ai_query_bp
 
     app.register_blueprint(characteristics_bp, url_prefix='/characteristics')
@@ -87,6 +88,7 @@ def create_app() -> Flask:
     app.register_blueprint(resources_bp, url_prefix='/resources')
     app.register_blueprint(stations_bp, url_prefix='/stations')
     app.register_blueprint(units_bp, url_prefix='/units')
+    app.register_blueprint(availability_bp, url_prefix='/availability')
     app.register_blueprint(ai_query_bp, url_prefix='/ai-query')
 
     @app.get('/')

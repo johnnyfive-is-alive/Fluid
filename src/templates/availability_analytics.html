@@ -1,0 +1,437 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-4">
+    <i class="bi bi-bar-chart"></i> Availability Analytics
+</h2>
+
+<p class="lead">
+    Visualize unassigned capacity for items over time. Filter by type, characteristics, or name to see available allocation percentages.
+</p>
+
+<!-- Filter Form -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filters</h5>
+    </div>
+    <div class="card-body">
+        <form id="filterForm">
+            <div class="row">
+                <!-- ItemType Filter -->
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label for="itemtype_id" class="form-label">Item Type</label>
+                        <select class="form-select" id="itemtype_id" name="itemtype_id">
+                            <option value="">All Types</option>
+                            {% for itemtype in itemtypes %}
+                            <option value="{{ itemtype['id'] }}">{{ itemtype['typename'] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Item Name Filter -->
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label for="itemname_filter" class="form-label">Item Name Contains</label>
+                        <input type="text"
+                               class="form-control"
+                               id="itemname_filter"
+                               name="itemname_filter"
+                               placeholder="e.g., ODVT, Ottawa">
+                        <div class="form-text">Case-insensitive search</div>
+                    </div>
+                </div>
+
+                <!-- Characteristic Key Filter -->
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label for="char_key" class="form-label">Characteristic Key</label>
+                        <select class="form-select" id="char_key" name="char_key">
+                            <option value="">None</option>
+                            {% for key in char_keys %}
+                            <option value="{{ key['itemkey'] }}">{{ key['itemkey'] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Characteristic Value Filter -->
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label for="char_value" class="form-label">Characteristic Value Contains</label>
+                        <input type="text"
+                               class="form-control"
+                               id="char_value"
+                               name="char_value"
+                               placeholder="e.g., Ottawa">
+                        <div class="form-text">Requires key selection</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Date Range -->
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label for="start_month" class="form-label">Start Month</label>
+                        <input type="month"
+                               class="form-control"
+                               id="start_month"
+                               name="start_month"
+                               value="{{ start_month }}"
+                               required>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="mb-3">
+                        <label for="end_month" class="form-label">End Month</label>
+                        <input type="month"
+                               class="form-control"
+                               id="end_month"
+                               name="end_month"
+                               value="{{ end_month }}"
+                               required>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search"></i> Query Availability
+                            </button>
+                            <button type="button" id="exportBtn" class="btn btn-success" disabled>
+                                <i class="bi bi-download"></i> Export CSV
+                            </button>
+                            <button type="reset" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Results Section -->
+<div id="resultsSection" style="display: none;">
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center bg-light">
+                <div class="card-body">
+                    <h3 class="display-4" id="itemCount">0</h3>
+                    <p class="text-muted mb-0">Items Matched</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-light">
+                <div class="card-body">
+                    <h3 class="display-4" id="monthCount">0</h3>
+                    <p class="text-muted mb-0">Months</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-success text-white">
+                <div class="card-body">
+                    <h3 class="display-4" id="avgAvailable">0%</h3>
+                    <p class="mb-0">Avg Available</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center bg-info text-white">
+                <div class="card-body">
+                    <h3 class="display-4" id="avgAllocated">0%</h3>
+                    <p class="mb-0">Avg Allocated</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visualization -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-graph-up"></i> Available Capacity Over Time</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="availabilityChart" height="100"></canvas>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="bi bi-table"></i> Detailed Data</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-sm table-striped table-hover">
+                    <thead class="table-dark sticky-top">
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Type</th>
+                            <th>Month</th>
+                            <th class="text-end">Allocated %</th>
+                            <th class="text-end">Available %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Indicator -->
+<div id="loadingIndicator" class="text-center" style="display: none;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-2">Calculating availability...</p>
+</div>
+
+<!-- Example Usage -->
+<div class="card mt-4 bg-light">
+    <div class="card-body">
+        <h5 class="card-title"><i class="bi bi-lightbulb"></i> Example Queries</h5>
+        <ul class="mb-0">
+            <li><strong>ODVT stations in Ottawa:</strong>
+                ItemType = "STATION", Item Name Contains = "ODVT", Characteristic = "Location: Ottawa"
+            </li>
+            <li><strong>All unallocated stations:</strong>
+                ItemType = "STATION", leave other filters empty
+            </li>
+            <li><strong>Resources with high availability:</strong>
+                ItemType = "RESOURCE", filter results by high available %
+            </li>
+        </ul>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+let currentData = null;
+let availabilityChart = null;
+
+document.getElementById('filterForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    // Show loading, hide results
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+    document.getElementById('exportBtn').disabled = true;
+
+    // Get form data
+    const formData = new FormData(this);
+
+    try {
+        const response = await fetch('{{ url_for("availability.query_availability") }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            currentData = result.data;
+            displayResults(result);
+            document.getElementById('exportBtn').disabled = false;
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Request failed: ' + error);
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+});
+
+function displayResults(result) {
+    const data = result.data;
+
+    if (data.length === 0) {
+        alert('No data found matching your filters.');
+        return;
+    }
+
+    // Show results section
+    document.getElementById('resultsSection').style.display = 'block';
+
+    // Calculate statistics
+    const uniqueItems = new Set(data.map(d => d.itemname)).size;
+    const uniqueMonths = new Set(data.map(d => d.monthyear)).size;
+    const avgAvailable = data.reduce((sum, d) => sum + d.available_percent, 0) / data.length;
+    const avgAllocated = data.reduce((sum, d) => sum + d.allocated_percent, 0) / data.length;
+
+    // Update stats cards
+    document.getElementById('itemCount').textContent = uniqueItems;
+    document.getElementById('monthCount').textContent = uniqueMonths;
+    document.getElementById('avgAvailable').textContent = avgAvailable.toFixed(1) + '%';
+    document.getElementById('avgAllocated').textContent = avgAllocated.toFixed(1) + '%';
+
+    // Populate data table
+    const tbody = document.getElementById('dataTableBody');
+    tbody.innerHTML = '';
+
+    data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><strong>${row.itemname}</strong></td>
+            <td><span class="badge bg-info">${row.typename}</span></td>
+            <td>${row.monthyear}</td>
+            <td class="text-end">${row.allocated_percent.toFixed(1)}%</td>
+            <td class="text-end"><strong>${row.available_percent.toFixed(1)}%</strong></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Create chart
+    createChart(data);
+}
+
+function createChart(data) {
+    const ctx = document.getElementById('availabilityChart').getContext('2d');
+
+    // Destroy existing chart if it exists
+    if (availabilityChart) {
+        availabilityChart.destroy();
+    }
+
+    // Group data by item
+    const itemGroups = {};
+    data.forEach(row => {
+        if (!itemGroups[row.itemname]) {
+            itemGroups[row.itemname] = [];
+        }
+        itemGroups[row.itemname].push(row);
+    });
+
+    // Get all unique months (sorted)
+    const months = [...new Set(data.map(d => d.monthyear))].sort();
+
+    // Create datasets for each item
+    const colors = [
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 159, 64, 0.8)',
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(255, 206, 86, 0.8)',
+        'rgba(201, 203, 207, 0.8)',
+        'rgba(83, 102, 255, 0.8)'
+    ];
+
+    const datasets = Object.keys(itemGroups).map((itemname, idx) => {
+        const itemData = itemGroups[itemname];
+
+        return {
+            label: itemname,
+            data: months.map(month => {
+                const record = itemData.find(d => d.monthyear === month);
+                return record ? record.available_percent : 0;
+            }),
+            backgroundColor: colors[idx % colors.length],
+            borderColor: colors[idx % colors.length].replace('0.8', '1'),
+            borderWidth: 2,
+            fill: false
+        };
+    });
+
+    // Create chart
+    availabilityChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: months,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Available Capacity by Month (%)',
+                    font: { size: 16 }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '% available';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Available %'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Export functionality
+document.getElementById('exportBtn').addEventListener('click', function() {
+    if (!currentData) {
+        alert('No data to export');
+        return;
+    }
+
+    // Build query string from form
+    const form = document.getElementById('filterForm');
+    const formData = new FormData(form);
+    const params = new URLSearchParams(formData);
+
+    // Redirect to export endpoint
+    window.location.href = '{{ url_for("availability.export_csv") }}?' + params.toString();
+});
+
+// Reset button handler
+document.getElementById('filterForm').addEventListener('reset', function() {
+    setTimeout(() => {
+        document.getElementById('resultsSection').style.display = 'none';
+        document.getElementById('exportBtn').disabled = true;
+        if (availabilityChart) {
+            availabilityChart.destroy();
+            availabilityChart = null;
+        }
+    }, 10);
+});
+</script>
+
+<style>
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+</style>
+{% endblock %}
