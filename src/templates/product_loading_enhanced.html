@@ -1,0 +1,595 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-sliders"></i> Enhanced Product Loading: {{ product.itemname }}
+                </h2>
+                <div>
+                    <a href="{{ url_for('product_loading.view_product_loading', product_id=product.id) }}" 
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Standard View
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Panel: Filters and Item Selection -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-funnel"></i> Step 1: Filter & Select Items</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Item Type Filter -->
+                    <div class="mb-3">
+                        <label for="itemtype_filter" class="form-label">Item Type</label>
+                        <select class="form-select" id="itemtype_filter">
+                            <option value="">All Types</option>
+                            {% for itemtype in item_types %}
+                            <option value="{{ itemtype['id'] }}">{{ itemtype['typename'] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Characteristic Key Filter -->
+                    <div class="mb-3">
+                        <label for="char_key_filter" class="form-label">Characteristic Key</label>
+                        <select class="form-select" id="char_key_filter">
+                            <option value="">None</option>
+                            {% for key in char_keys %}
+                            <option value="{{ key }}">{{ key }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Characteristic Value Filter -->
+                    <div class="mb-3">
+                        <label for="char_value_filter" class="form-label">Characteristic Value</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="char_value_filter" 
+                               placeholder="Enter value or partial match"
+                               disabled>
+                        <div class="form-text">Enable by selecting a characteristic key</div>
+                    </div>
+
+                    <!-- Item Name Filter -->
+                    <div class="mb-3">
+                        <label for="itemname_filter" class="form-label">Item Name Contains</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="itemname_filter" 
+                               placeholder="e.g., ODVT, Ottawa">
+                    </div>
+
+                    <!-- Apply Filters Button -->
+                    <button class="btn btn-primary w-100 mb-3" id="applyFiltersBtn">
+                        <i class="bi bi-search"></i> Apply Filters
+                    </button>
+
+                    <hr>
+
+                    <!-- Filtered Items List -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <strong>Filtered Items</strong> 
+                            <span class="badge bg-secondary" id="itemCount">0</span>
+                        </label>
+                        <div id="itemsList" class="border rounded p-2" style="max-height: 400px; overflow-y: auto;">
+                            <p class="text-muted text-center mb-0">
+                                Click "Apply Filters" to see matching items
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Select All / Deselect All -->
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary flex-fill" id="selectAllBtn" disabled>
+                            Select All
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary flex-fill" id="deselectAllBtn" disabled>
+                            Deselect All
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Selected Items Summary -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="bi bi-check-circle"></i> Selected Items 
+                        <span class="badge bg-light text-dark" id="selectedCount">0</span>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="selectedItemsList" style="max-height: 200px; overflow-y: auto;">
+                        <p class="text-muted text-center mb-0 small">
+                            No items selected
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Month Selection and Allocation -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-calendar-month"></i> Step 2: Select Months & Assign Percentages</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Month Selection -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <label for="startMonth" class="form-label">Start Month</label>
+                            <input type="month" class="form-control" id="startMonth" value="{{ default_months[0] }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="endMonth" class="form-label">End Month</label>
+                            <input type="month" class="form-control" id="endMonth" value="{{ default_months[-1] }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button class="btn btn-primary w-100" id="generateMonthsBtn">
+                                <i class="bi bi-calendar-plus"></i> Generate Months
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Instructions:</strong> Enter percentage (0-100) for each item-month combination. 
+                        Leave blank or enter 0 to remove allocation.
+                    </div>
+
+                    <!-- Allocation Grid -->
+                    <div id="allocationGridContainer">
+                        <p class="text-muted text-center">
+                            Select items and generate months to begin allocation
+                        </p>
+                    </div>
+
+                    <!-- Save Button -->
+                    <div class="mt-4">
+                        <button class="btn btn-success btn-lg w-100" id="saveAllocationsBtn" disabled>
+                            <i class="bi bi-save"></i> Save All Allocations
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing Allocations Summary -->
+            {% if existing_allocations %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-list-check"></i> Current Allocations for {{ product.itemname }}</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Type</th>
+                                    <th>Month</th>
+                                    <th class="text-end">Percent</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alloc in existing_allocations %}
+                                <tr>
+                                    <td>{{ alloc['itemname'] }}</td>
+                                    <td><span class="badge bg-secondary">{{ alloc['typename'] }}</span></td>
+                                    <td>{{ alloc['monthyear'] }}</td>
+                                    <td class="text-end">{{ "%.1f"|format(alloc['percent']) }}%</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// State management
+let selectedItems = new Set();
+let generatedMonths = [];
+let allocationData = {};
+
+const productId = {{ product.id }};
+
+// DOM Elements
+const itemTypeFilter = document.getElementById('itemtype_filter');
+const charKeyFilter = document.getElementById('char_key_filter');
+const charValueFilter = document.getElementById('char_value_filter');
+const itemnameFilter = document.getElementById('itemname_filter');
+const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+const itemsList = document.getElementById('itemsList');
+const itemCount = document.getElementById('itemCount');
+const selectAllBtn = document.getElementById('selectAllBtn');
+const deselectAllBtn = document.getElementById('deselectAllBtn');
+const selectedItemsList = document.getElementById('selectedItemsList');
+const selectedCount = document.getElementById('selectedCount');
+const startMonth = document.getElementById('startMonth');
+const endMonth = document.getElementById('endMonth');
+const generateMonthsBtn = document.getElementById('generateMonthsBtn');
+const allocationGridContainer = document.getElementById('allocationGridContainer');
+const saveAllocationsBtn = document.getElementById('saveAllocationsBtn');
+
+// Enable/disable characteristic value filter based on key selection
+charKeyFilter.addEventListener('change', function() {
+    if (this.value) {
+        charValueFilter.disabled = false;
+        // Optionally load values for this key
+        loadCharacteristicValues(this.value);
+    } else {
+        charValueFilter.disabled = true;
+        charValueFilter.value = '';
+    }
+});
+
+// Load characteristic values (optional enhancement)
+function loadCharacteristicValues(key) {
+    const formData = new FormData();
+    formData.append('char_key', key);
+    
+    fetch(`/product-loading-enhanced/${productId}/get-characteristic-values`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Could populate a datalist here
+            console.log('Available values:', data.values);
+        }
+    })
+    .catch(error => console.error('Error loading values:', error));
+}
+
+// Apply filters and load items
+applyFiltersBtn.addEventListener('click', function() {
+    const formData = new FormData();
+    formData.append('itemtype_id', itemTypeFilter.value);
+    formData.append('char_key', charKeyFilter.value);
+    formData.append('char_value', charValueFilter.value);
+    formData.append('itemname_filter', itemnameFilter.value);
+    
+    fetch(`/product-loading-enhanced/${productId}/filter-items`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displayFilteredItems(data.items);
+            itemCount.textContent = data.count;
+            selectAllBtn.disabled = data.count === 0;
+            deselectAllBtn.disabled = data.count === 0;
+        } else {
+            alert('Error filtering items: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error filtering items');
+    });
+});
+
+// Display filtered items
+function displayFilteredItems(items) {
+    if (items.length === 0) {
+        itemsList.innerHTML = '<p class="text-muted text-center mb-0">No items match the filters</p>';
+        return;
+    }
+    
+    let html = '<div class="list-group list-group-flush">';
+    items.forEach(item => {
+        const isSelected = selectedItems.has(item.id);
+        html += `
+            <div class="list-group-item p-2">
+                <div class="form-check">
+                    <input class="form-check-input item-checkbox" 
+                           type="checkbox" 
+                           value="${item.id}" 
+                           id="item_${item.id}"
+                           data-itemname="${item.itemname}"
+                           data-typename="${item.typename}"
+                           ${isSelected ? 'checked' : ''}>
+                    <label class="form-check-label" for="item_${item.id}">
+                        <strong>${item.itemname}</strong>
+                        <span class="badge bg-secondary ms-2">${item.typename}</span>
+                    </label>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    itemsList.innerHTML = html;
+    
+    // Add event listeners to checkboxes
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                selectedItems.add(parseInt(this.value));
+            } else {
+                selectedItems.delete(parseInt(this.value));
+            }
+            updateSelectedItemsList();
+            updateAllocationGrid();
+        });
+    });
+}
+
+// Select all items
+selectAllBtn.addEventListener('click', function() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+        selectedItems.add(parseInt(checkbox.value));
+    });
+    updateSelectedItemsList();
+    updateAllocationGrid();
+});
+
+// Deselect all items
+deselectAllBtn.addEventListener('click', function() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+        selectedItems.delete(parseInt(checkbox.value));
+    });
+    updateSelectedItemsList();
+    updateAllocationGrid();
+});
+
+// Update selected items list
+function updateSelectedItemsList() {
+    selectedCount.textContent = selectedItems.size;
+    
+    if (selectedItems.size === 0) {
+        selectedItemsList.innerHTML = '<p class="text-muted text-center mb-0 small">No items selected</p>';
+        return;
+    }
+    
+    let html = '<div class="list-group list-group-flush">';
+    document.querySelectorAll('.item-checkbox:checked').forEach(checkbox => {
+        const itemname = checkbox.dataset.itemname;
+        const typename = checkbox.dataset.typename;
+        html += `
+            <div class="list-group-item p-2">
+                <small>
+                    <strong>${itemname}</strong>
+                    <span class="badge bg-secondary ms-1">${typename}</span>
+                </small>
+            </div>
+        `;
+    });
+    html += '</div>';
+    selectedItemsList.innerHTML = html;
+}
+
+// Generate months
+generateMonthsBtn.addEventListener('click', function() {
+    const start = startMonth.value;
+    const end = endMonth.value;
+    
+    if (!start || !end) {
+        alert('Please select both start and end months');
+        return;
+    }
+    
+    if (start > end) {
+        alert('Start month must be before or equal to end month');
+        return;
+    }
+    
+    generatedMonths = generateMonthRange(start, end);
+    updateAllocationGrid();
+});
+
+// Generate month range
+function generateMonthRange(start, end) {
+    const months = [];
+    let current = new Date(start + '-01');
+    const endDate = new Date(end + '-01');
+    
+    while (current <= endDate) {
+        const year = current.getFullYear();
+        const month = String(current.getMonth() + 1).padStart(2, '0');
+        months.push(`${year}-${month}`);
+        current.setMonth(current.getMonth() + 1);
+    }
+    
+    return months;
+}
+
+// Update allocation grid
+function updateAllocationGrid() {
+    if (selectedItems.size === 0 || generatedMonths.length === 0) {
+        allocationGridContainer.innerHTML = '<p class="text-muted text-center">Select items and generate months to begin allocation</p>';
+        saveAllocationsBtn.disabled = true;
+        return;
+    }
+    
+    let html = '<div class="table-responsive" style="max-height: 500px; overflow-y: auto;">';
+    html += '<table class="table table-sm table-bordered table-hover">';
+    html += '<thead class="table-dark sticky-top"><tr><th>Item</th>';
+    
+    // Month headers
+    generatedMonths.forEach(month => {
+        html += `<th class="text-center">${month}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    
+    // Row for each selected item
+    document.querySelectorAll('.item-checkbox:checked').forEach(checkbox => {
+        const itemId = parseInt(checkbox.value);
+        const itemname = checkbox.dataset.itemname;
+        
+        html += `<tr><td><strong>${itemname}</strong></td>`;
+        
+        generatedMonths.forEach(month => {
+            const key = `${itemId}_${month}`;
+            const value = allocationData[key] || '';
+            html += `
+                <td class="p-1">
+                    <input type="number" 
+                           class="form-control form-control-sm text-end allocation-input" 
+                           data-item="${itemId}" 
+                           data-month="${month}"
+                           value="${value}" 
+                           placeholder="%" 
+                           min="0" 
+                           max="100" 
+                           step="0.1">
+                </td>
+            `;
+        });
+        
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table></div>';
+    allocationGridContainer.innerHTML = html;
+    
+    // Add event listeners to inputs
+    document.querySelectorAll('.allocation-input').forEach(input => {
+        input.addEventListener('change', function() {
+            const key = `${this.dataset.item}_${this.dataset.month}`;
+            allocationData[key] = this.value;
+        });
+    });
+    
+    saveAllocationsBtn.disabled = false;
+    
+    // Load existing allocations
+    loadExistingAllocations();
+}
+
+// Load existing allocations for selected items and months
+function loadExistingAllocations() {
+    if (selectedItems.size === 0 || generatedMonths.length === 0) return;
+    
+    const formData = new FormData();
+    Array.from(selectedItems).forEach(id => {
+        formData.append('item_ids[]', id);
+    });
+    
+    // For simplicity, load all months at once
+    generatedMonths.forEach(month => {
+        const monthFormData = new FormData();
+        monthFormData.append('month', month);
+        Array.from(selectedItems).forEach(id => {
+            monthFormData.append('item_ids[]', id);
+        });
+        
+        fetch(`/product-loading-enhanced/${productId}/get-allocations`, {
+            method: 'POST',
+            body: monthFormData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update inputs with existing data
+                Object.entries(data.allocations).forEach(([itemId, percent]) => {
+                    const input = document.querySelector(`input[data-item="${itemId}"][data-month="${month}"]`);
+                    if (input) {
+                        input.value = percent;
+                        allocationData[`${itemId}_${month}`] = percent;
+                    }
+                });
+            }
+        })
+        .catch(error => console.error('Error loading allocations:', error));
+    });
+}
+
+// Save all allocations
+saveAllocationsBtn.addEventListener('click', function() {
+    if (selectedItems.size === 0 || generatedMonths.length === 0) {
+        alert('Please select items and months');
+        return;
+    }
+    
+    // Collect all allocation data from inputs
+    const allocations = [];
+    document.querySelectorAll('.allocation-input').forEach(input => {
+        const itemId = parseInt(input.dataset.item);
+        const month = input.dataset.month;
+        const percent = input.value ? parseFloat(input.value) : 0;
+        
+        allocations.push({
+            item_id: itemId,
+            month: month,
+            percent: percent
+        });
+    });
+    
+    if (allocations.length === 0) {
+        alert('No allocations to save');
+        return;
+    }
+    
+    // Confirm save
+    if (!confirm(`Save ${allocations.length} allocation entries?`)) {
+        return;
+    }
+    
+    // Disable button and show loading
+    saveAllocationsBtn.disabled = true;
+    saveAllocationsBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+    
+    fetch(`/product-loading-enhanced/${productId}/save-allocations`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(allocations)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // Optionally reload or redirect
+            location.reload();
+        } else {
+            alert('Error saving allocations: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving allocations');
+    })
+    .finally(() => {
+        saveAllocationsBtn.disabled = false;
+        saveAllocationsBtn.innerHTML = '<i class="bi bi-save"></i> Save All Allocations';
+    });
+});
+</script>
+
+<style>
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.allocation-input {
+    width: 80px;
+}
+
+.list-group-flush > .list-group-item {
+    border-width: 1px 0;
+}
+</style>
+{% endblock %}

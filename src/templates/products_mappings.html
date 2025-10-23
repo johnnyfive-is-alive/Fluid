@@ -7,7 +7,13 @@
                 <i class="bi bi-basket"></i> Product: {{ product.itemname }}
             </h2>
             <div>
-                <!-- Loading Profile button (NEW!) -->
+                <!-- Enhanced Allocation Button (NEW!) -->
+                <a href="{{ url_for('product_loading_enhanced.enhanced_allocation_interface', product_id=product.id) }}"
+                   class="btn btn-warning">
+                    <i class="bi bi-sliders"></i> Enhanced Allocation
+                </a>
+
+                <!-- Loading Profile button -->
                 <a href="{{ url_for('product_loading.view_product_loading', product_id=product.id) }}"
                    class="btn btn-primary">
                     <i class="bi bi-calendar-check"></i> Loading Profile
@@ -101,20 +107,16 @@
             </div>
         </div>
 
-        <!-- Loading Details Chart and Table -->
+        <!-- Loading details by month -->
         {% if loading_details %}
         <div class="card">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Loading Distribution Over Time</h5>
+                <h5 class="mb-0">Loading Details by Month</h5>
             </div>
             <div class="card-body">
-                <!-- Chart -->
-                <canvas id="loadingChart" height="80"></canvas>
-
-                <!-- Detailed table -->
-                <div class="table-responsive mt-4">
-                    <table class="table table-sm">
-                        <thead>
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light sticky-top">
                             <tr>
                                 <th>Month</th>
                                 <th>Item</th>
@@ -124,9 +126,9 @@
                         <tbody>
                             {% for detail in loading_details %}
                             <tr>
-                                <td>{{ detail.monthyear }}</td>
-                                <td>{{ detail.itemname }}</td>
-                                <td class="text-end">{{ "%.1f"|format(detail.percent) }}%</td>
+                                <td>{{ detail['monthyear'] }}</td>
+                                <td>{{ detail['itemname'] }}</td>
+                                <td class="text-end">{{ "%.1f"|format(detail['percent']) }}%</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -138,127 +140,11 @@
     </div>
 </div>
 
-{% if loading_details %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Prepare chart data from loading details
-    const loadingDetails = {{ loading_details|tojson }};
-
-    // Group by month and aggregate by item
-    const monthlyData = {};
-    const items = new Set();
-
-    loadingDetails.forEach(record => {
-        if (!monthlyData[record.monthyear]) {
-            monthlyData[record.monthyear] = {};
-        }
-        monthlyData[record.monthyear][record.itemname] = record.percent;
-        items.add(record.itemname);
-    });
-
-    const months = Object.keys(monthlyData).sort();
-    const itemArray = Array.from(items).sort();
-
-    // Create datasets for each item (stacked bars)
-    const colors = [
-        'rgba(54, 162, 235, 0.8)',
-        'rgba(255, 99, 132, 0.8)',
-        'rgba(75, 192, 192, 0.8)',
-        'rgba(255, 206, 86, 0.8)',
-        'rgba(153, 102, 255, 0.8)',
-        'rgba(255, 159, 64, 0.8)',
-        'rgba(199, 199, 199, 0.8)',
-        'rgba(83, 102, 255, 0.8)',
-        'rgba(255, 99, 255, 0.8)',
-        'rgba(99, 255, 132, 0.8)'
-    ];
-
-    const datasets = itemArray.map((item, idx) => {
-        return {
-            label: item,
-            data: months.map(month => monthlyData[month][item] || 0),
-            backgroundColor: colors[idx % colors.length],
-            borderColor: colors[idx % colors.length].replace('0.8', '1'),
-            borderWidth: 2
-        };
-    });
-
-    // Create the stacked bar chart
-    const ctx = document.getElementById('loadingChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: months,
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Loading Allocation by Item and Month (%)',
-                    font: { size: 18, weight: 'bold' }
-                },
-                legend: {
-                    display: true,
-                    position: 'right',
-                    labels: {
-                        font: { size: 14 }
-                    }
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        footer: function(tooltipItems) {
-                            let sum = 0;
-                            tooltipItems.forEach(function(tooltipItem) {
-                                sum += tooltipItem.parsed.y;
-                            });
-                            return 'Total: ' + sum.toFixed(1) + '%';
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    stacked: true,
-                    title: {
-                        display: true,
-                        text: 'Month',
-                        font: { size: 14, weight: 'bold' }
-                    },
-                    ticks: {
-                        font: { size: 12 }
-                    }
-                },
-                y: {
-                    stacked: true,
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                        display: true,
-                        text: 'Loading Percentage (%)',
-                        font: { size: 14, weight: 'bold' }
-                    },
-                    ticks: {
-                        font: { size: 12 },
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    }
-                }
-            },
-            interaction: {
-                mode: 'index',
-                intersect: false
-            }
-        }
-    });
-});
-</script>
-{% endif %}
-
+<style>
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+</style>
 {% endblock %}
