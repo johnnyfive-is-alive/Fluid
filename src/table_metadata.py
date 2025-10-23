@@ -4,6 +4,67 @@ Helps AI understand formatting conventions and business rules.
 """
 
 TABLE_METADATA = {
+    'productloading': {
+        'description': 'Product resource requirements by month and item type',
+        'capitalization': 'N/A',
+        'columns': {
+            'id': {
+                'description': 'Primary key',
+                'format': 'Integer'
+            },
+            'fkproduct': {
+                'description': 'Foreign key to items (product type)',
+                'format': 'Integer',
+                'notes': 'Product that needs resources'
+            },
+            'fkitemtype': {
+                'description': 'Foreign key to itemtypes',
+                'format': 'Integer',
+                'notes': 'Type of resource needed (RESOURCE, STATION, etc.)'
+            },
+            'monthyear': {
+                'description': 'Month in YYYY-MM format',
+                'format': 'YYYY-MM',
+                'examples': ['2025-01', '2025-12', '2024-09'],
+                'validation': 'Must match pattern YYYY-MM with valid year/month'
+            },
+            'quantity': {
+                'description': 'Number of units needed',
+                'format': 'Decimal',
+                'range': '0 or greater',
+                'examples': [2.5, 5.0, 10.0],
+                'notes': 'Can be fractional (e.g., 2.5 stations)'
+            },
+            'notes': {
+                'description': 'Optional notes or explanation',
+                'format': 'Text',
+                'examples': ['Ramp-up phase', 'Peak season', 'Reduced capacity']
+            }
+        },
+        'constraints': [
+            'Unique constraint on (fkproduct, fkitemtype, monthyear)',
+            'One requirement per product-itemtype-month combination'
+        ],
+        'business_rules': [
+            'Quantity must be >= 0',
+            'Represents generic resource needs, not specific item allocations',
+            'Used for capacity planning and requirement tracking',
+            'Different from itemloading which tracks actual allocations'
+        ],
+        'common_queries': [
+            'Total resource requirements by month across all products',
+            'Requirements for a specific product over time',
+            'Monthly requirements by resource type',
+            'Compare requirements vs actual allocations (join with itemloading)',
+            'Products with unmet requirements'
+        ],
+        'relationship_notes': [
+            'productloading specifies WHAT resources are needed',
+            'itemloading tracks HOW specific items are allocated',
+            'Use both tables to compare planned vs actual allocation'
+        ]
+    },
+
     'itemtypes': {
         'description': 'Categories/types for items',
         'capitalization': 'UPPERCASE',
@@ -178,7 +239,11 @@ TABLE_METADATA = {
             'Which items are mapped to a product?',
             'Items with no product mappings'
         ]
+
+
     }
+
+
 }
 
 
@@ -205,3 +270,5 @@ def get_business_rules(table_name: str) -> list:
     """Get business rules for a table."""
     table = TABLE_METADATA.get(table_name, {})
     return table.get('business_rules', [])
+
+

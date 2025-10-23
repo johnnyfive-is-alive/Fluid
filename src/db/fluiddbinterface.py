@@ -456,3 +456,115 @@ class VerificationDB:
         unallocated_id = self.add_item('UNALLOCATED', product_type_id)
         self.con.commit()
         return unallocated_id
+
+    # ====================================================
+    # Product Loading Methods (add to fluiddbinterface.py)
+    # ====================================================
+
+    def add_product_loading(
+            self,
+            fkproduct: int,
+            fkitemtype: int,
+            monthyear: str,
+            quantity: float,
+            notes: Optional[str] = None,
+    ) -> int:
+        """Insert product loading requirement. Returns auto-generated id."""
+        cur = self._execute(
+            'INSERT INTO "productloading" ("fkproduct","fkitemtype","monthyear","quantity","notes") '
+            'VALUES (?,?,?,?,?);',
+            (fkproduct, fkitemtype, monthyear, quantity, notes),
+        )
+        return cur.lastrowid
+
+    def update_product_loading(
+            self,
+            id: int,
+            fkproduct: Optional[int] = None,
+            fkitemtype: Optional[int] = None,
+            monthyear: Optional[str] = None,
+            quantity: Optional[float] = None,
+            notes: Optional[str] = None,
+    ) -> None:
+        """Update product loading by id."""
+        set_clause, params = self._update_set_clause(
+            {
+                "fkproduct": fkproduct,
+                "fkitemtype": fkitemtype,
+                "monthyear": monthyear,
+                "quantity": quantity,
+                "notes": notes,
+            }
+        )
+        self._execute(f'UPDATE "productloading" SET {set_clause} WHERE "id" = ?;', params + (id,))
+
+    def delete_product_loading(self, id: int) -> None:
+        """Delete product loading by id."""
+        self._execute('DELETE FROM "productloading" WHERE "id" = ?;', (id,))
+
+    def get_product_loading_by_id(self, id: int) -> Optional[sqlite3.Row]:
+        """Get product loading by id."""
+        cur = self._execute('SELECT * FROM "productloading" WHERE "id" = ?;', (id,))
+        return cur.fetchone()
+
+    def upsert_product_loading(
+            self,
+            fkproduct: int,
+            fkitemtype: int,
+            monthyear: str,
+            quantity: float,
+            notes: Optional[str] = None
+    ) -> None:
+        """Insert or update product loading requirement for product, item type, and month."""
+        cur = self._execute(
+            'SELECT "id" FROM "productloading" WHERE "fkproduct" = ? AND "fkitemtype" = ? AND "monthyear" = ?;',
+            (fkproduct, fkitemtype, monthyear),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            self._execute(
+                'UPDATE "productloading" SET "quantity" = ?, "notes" = ? WHERE "id" = ?;',
+                (quantity, notes, existing["id"]),
+            )
+        else:
+            self.add_product_loading(fkproduct, fkitemtype, monthyear, quantity, notes)
+
+    def list_product_loadings_for_product(self, fkproduct: int) -> Iterable[sqlite3.Row]:
+        """Get all loading requirements for a product."""
+        return self._execute(
+            'SELECT pl.*, it.typename FROM "productloading" pl '
+            'JOIN "itemtypes" it ON pl.fkitemtype = it.id '
+            'WHERE pl."fkproduct" = ? ORDER BY pl."monthyear", it.typename;',
+            (fkproduct,)
+        ).fetchall()
+
+    def get_product_loadings_for_month(self, monthyear: str) -> List[sqlite3.Row]:
+        """Get all product loading requirements for a specific month."""
+        cur = self._execute(
+            'SELECT pl.*, i.itemname as productname, it.typename '
+            'FROM "productloading" pl '
+            'JOIN "items" i ON pl.fkproduct = i.id '
+            'JOIN "itemtypes" it ON pl.fkitemtype = it.id '
+            'WHERE pl."monthyear" = ? '
+            'ORDER BY i.itemname, it.typename;',
+            (monthyear,)
+        )
+        return cur.fetchall()
+
+    def find_product_loading_ids(
+            self,
+            fkproduct: Optional[int] = None,
+            fkitemtype: Optional[int] = None,
+            monthyear: Optional[str] = None,
+    ) -> List[int]:
+        """Return list of productloading.id values matching filters."""
+        return self._indices_by_fields(
+            "productloading",
+            "id",
+            {
+                "fkproduct": fkproduct,
+                "fkitemtype": fkitemtype,
+                "monthyear": monthyear,
+            },
+        )

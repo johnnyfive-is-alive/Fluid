@@ -8,6 +8,12 @@
     </a>
 </div>
 
+<!-- Info alert -->
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    <strong>Tip:</strong> Click the <i class="bi bi-calendar-check"></i> icon to manage month-to-month resource requirements for each product.
+</div>
+
 <!-- Products table -->
 <div class="table-responsive">
     <table class="table table-striped table-hover">
@@ -39,34 +45,48 @@
                     </td>
                     <td>
                         <!-- View mappings -->
-                        <a href="{{ url_for('products.view_mappings', id=product['id']) }}" 
-                           class="btn btn-sm btn-outline-info">
-                            View Usage
+                        <a href="{{ url_for('products.view_mappings', id=product['id']) }}"
+                           class="btn btn-sm btn-outline-info"
+                           title="View item mappings and usage">
+                            <i class="bi bi-eye"></i> View
                         </a>
-                        
+
+                        <!-- Loading Profile (NEW!) -->
+                        <a href="{{ url_for('product_loading.view_product_loading', product_id=product['id']) }}"
+                           class="btn btn-sm btn-outline-primary"
+                           title="Manage month-to-month resource requirements">
+                            <i class="bi bi-calendar-check"></i> Loading
+                        </a>
+
                         <!-- Map items -->
-                        <a href="{{ url_for('products.map_form', product_id=product['id']) }}" 
-                           class="btn btn-sm btn-outline-secondary">
-                            Map Items
+                        <a href="{{ url_for('products.map_form', product_id=product['id']) }}"
+                           class="btn btn-sm btn-outline-secondary"
+                           title="Map items to this product">
+                            <i class="bi bi-link-45deg"></i> Map
                         </a>
-                        
+
                         <!-- Edit button -->
-                        <a href="{{ url_for('products.edit_form', id=product['id']) }}" 
-                           class="btn btn-sm btn-outline-primary">
-                            Edit
+                        <a href="{{ url_for('products.edit_form', id=product['id']) }}"
+                           class="btn btn-sm btn-outline-warning"
+                           title="Edit product name">
+                            <i class="bi bi-pencil"></i> Edit
                         </a>
-                        
+
                         <!-- Delete button (disabled for UNALLOCATED) -->
                         {% if product['itemname'] != 'UNALLOCATED' %}
-                        <form method="post" 
-                              action="{{ url_for('products.delete_product', id=product['id']) }}" 
+                        <form method="post"
+                              action="{{ url_for('products.delete_product', id=product['id']) }}"
                               style="display:inline;"
                               onsubmit="return confirm('Delete product \'{{ product['itemname'] }}\'? This will fail if mappings or loading records exist.');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            <button type="submit"
+                                    class="btn btn-sm btn-outline-danger"
+                                    title="Delete product">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
                         </form>
                         {% else %}
                         <button class="btn btn-sm btn-outline-danger" disabled title="System product cannot be deleted">
-                            Delete
+                            <i class="bi bi-trash"></i> Delete
                         </button>
                         {% endif %}
                     </td>
@@ -75,7 +95,7 @@
             {% else %}
                 <tr>
                     <td colspan="5" class="text-center text-muted">
-                        No products found. Add one to start tracking product-based loading!
+                        No products found. Add one to get started!
                     </td>
                 </tr>
             {% endif %}
@@ -83,46 +103,21 @@
     </table>
 </div>
 
-<!-- Info card -->
+<!-- Summary stats -->
 <div class="card mt-4">
     <div class="card-body">
-        <h5 class="card-title">About Products</h5>
+        <h5 class="card-title">Total Products: {{ products|length }}</h5>
         <p class="card-text">
-            Products represent what your items (stations, resources, units) are working on. 
-            Loading percentages can be allocated across different products per month.
+            Products represent what your resources, stations, and units work on.
+            Each product can be mapped to items and can have month-to-month loading requirements.
         </p>
-        <p class="card-text mb-0">
-            <strong>UNALLOCATED</strong> is a special system product that represents idle/inactive capacity.
-            It cannot be deleted.
-        </p>
-    </div>
-</div>
-
-<!-- Quick Stats -->
-<div class="row mt-4">
-    <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3 class="display-4">{{ products|length }}</h3>
-                <p class="text-muted mb-0">Total Products</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3 class="display-4">{{ products|sum(attribute='mapped_items') }}</h3>
-                <p class="text-muted mb-0">Total Mappings</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3 class="display-4">{{ products|sum(attribute='loading_count') }}</h3>
-                <p class="text-muted mb-0">Loading Records</p>
-            </div>
-        </div>
+        <ul class="mb-0">
+            <li><strong>View:</strong> See which items are mapped to this product and usage statistics</li>
+            <li><strong>Loading:</strong> Define how many generic resources/stations/units this product needs each month</li>
+            <li><strong>Map:</strong> Assign which items can work on this product</li>
+            <li><strong>Edit:</strong> Change the product name</li>
+            <li><strong>Delete:</strong> Remove the product and all its data</li>
+        </ul>
     </div>
 </div>
 {% endblock %}

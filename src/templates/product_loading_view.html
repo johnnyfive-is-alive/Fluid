@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-calendar-check"></i> Loading Profile: {{ product.itemname }}
+            </h2>
+            <div>
+                <a href="{{ url_for('product_loading.edit_form', product_id=product.id) }}" 
+                   class="btn btn-primary">
+                    <i class="bi bi-pencil"></i> Edit Allocations
+                </a>
+                <a href="{{ url_for('products.view_mappings', id=product.id) }}"
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Product
+                </a>
+            </div>
+        </div>
+
+        {% if not monthly_data %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            No loading requirements defined yet. Click "Edit Allocations" to add month-to-month resource needs.
+        </div>
+        {% else %}
+
+        <!-- Summary Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Total Months</h6>
+                        <h3>{{ sorted_months|length }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Resource Types</h6>
+                        <h3>
+                            {% set all_types = [] %}
+                            {% for month in monthly_data.values() %}
+                                {% for req in month %}
+                                    {% if req.typename not in all_types %}
+                                        {% set _ = all_types.append(req.typename) %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            {{ all_types|length }}
+                        </h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Total Requirements</h6>
+                        <h3>
+                            {% set total = namespace(count=0) %}
+                            {% for month in monthly_data.values() %}
+                                {% for req in month %}
+                                    {% set total.count = total.count + req.quantity %}
+                                {% endfor %}
+                            {% endfor %}
+                            {{ "%.1f"|format(total.count) }}
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Breakdown Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Month-to-Month Requirements</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Resource Type</th>
+                                <th class="text-end">Quantity</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for month in sorted_months %}
+                                {% set requirements = monthly_data[month] %}
+                                {% for req in requirements %}
+                                <tr>
+                                    {% if loop.first %}
+                                    <td rowspan="{{ requirements|length }}" class="align-middle">
+                                        <strong>{{ month }}</strong>
+                                    </td>
+                                    {% endif %}
+                                    <td>
+                                        <span class="badge bg-secondary">{{ req.typename }}</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <strong>{{ "%.2f"|format(req.quantity) }}</strong>
+                                    </td>
+                                    <td>
+                                        {% if req.notes %}
+                                        <small class="text-muted">{{ req.notes }}</small>
+                                        {% else %}
+                                        <small class="text-muted fst-italic">No notes</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="POST" 
+                                              action="{{ url_for('product_loading.delete_loading', product_id=product.id, loading_id=req.id) }}"
+                                              style="display: inline;"
+                                              onsubmit="return confirm('Delete this requirement?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Chart -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Resource Requirements Over Time</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="loadingChart" height="80"></canvas>
+            </div>
+        </div>
+
+        {% endif %}
+    </div>
+</div>
+
+{% if monthly_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Prepare data for chart
+    const monthlyData = {{ monthly_data|tojson }};
+    const sortedMonths = {{ sorted_months|tojson }};
+    
+    // Extract all unique resource types
+    const resourceTypes = new Set();
+    Object.values(monthlyData).forEach(month => {
+        month.forEach(req => resourceTypes.add(req.typename));
+    });
+    
+    // Create datasets for each resource type
+    const datasets = Array.from(resourceTypes).map((typename, idx) => {
+        const colors = [
+            'rgb(255, 99, 132)',
+            'rgb(54, 162, 235)',
+            'rgb(255, 205, 86)',
+            'rgb(75, 192, 192)',
+            'rgb(153, 102, 255)',
+            'rgb(255, 159, 64)'
+        ];
+        
+        const data = sortedMonths.map(month => {
+            const req = monthlyData[month].find(r => r.typename === typename);
+            return req ? req.quantity : 0;
+        });
+        
+        return {
+            label: typename,
+            data: data,
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length] + '33',
+            fill: false,
+            tension: 0.1
+        };
+    });
+    
+    // Create chart
+    const ctx = document.getElementById('loadingChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sortedMonths,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Quantity (Units)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+
+{% endblock %}

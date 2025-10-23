@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-pencil"></i> Edit Loading Profile: {{ product.itemname }}
+            </h2>
+            <a href="{{ url_for('product_loading.view_product_loading', product_id=product.id) }}" 
+               class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Cancel
+            </a>
+        </div>
+
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <strong>Instructions:</strong> Enter the quantity of each resource type needed per month. 
+            Leave blank or enter 0 to remove a requirement. Add notes if needed.
+        </div>
+
+        <!-- Month Range Selector -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Month Range</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="startMonth" class="form-label">Start Month</label>
+                        <input type="month" class="form-control" id="startMonth" 
+                               value="{{ all_months[0] if all_months else '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="endMonth" class="form-label">End Month</label>
+                        <input type="month" class="form-control" id="endMonth" 
+                               value="{{ all_months[-1] if all_months else '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" class="btn btn-primary d-block" id="generateMonths">
+                            <i class="bi bi-arrow-repeat"></i> Generate Months
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Allocation Form -->
+        <form method="POST" action="{{ url_for('product_loading.save_loading', product_id=product.id) }}" id="loadingForm">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Resource Requirements by Month</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="loadingTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 120px;">Month</th>
+                                    {% for item_type in item_types %}
+                                    <th class="text-center" colspan="2">
+                                        <span class="badge bg-secondary">{{ item_type.typename }}</span>
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    {% for item_type in item_types %}
+                                    <th class="text-center" style="font-size: 0.85em;">Quantity</th>
+                                    <th class="text-center" style="font-size: 0.85em;">Notes</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody id="monthRows">
+                                {% for month in all_months %}
+                                <tr data-month="{{ month }}">
+                                    <td class="align-middle">
+                                        <strong>{{ month }}</strong>
+                                    </td>
+                                    {% for item_type in item_types %}
+                                        {% set existing = loading_matrix.get(month, {}).get(item_type.typename, {}) %}
+                                        <td style="width: 120px;">
+                                            <input type="number" 
+                                                   class="form-control form-control-sm" 
+                                                   name="loading[{{ month }}][{{ item_type.typename }}]"
+                                                   step="0.1"
+                                                   min="0"
+                                                   placeholder="0"
+                                                   value="{{ existing.quantity if existing.quantity is defined else '' }}">
+                                        </td>
+                                        <td style="width: 200px;">
+                                            <input type="text" 
+                                                   class="form-control form-control-sm" 
+                                                   name="notes[{{ month }}][{{ item_type.typename }}]"
+                                                   placeholder="Optional notes"
+                                                   value="{{ existing.notes if existing.notes else '' }}">
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if not all_months %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        No months available. Use the month range selector above to generate months.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mt-4 d-flex justify-content-between">
+                <a href="{{ url_for('product_loading.view_product_loading', product_id=product.id) }}" 
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-success btn-lg">
+                    <i class="bi bi-check-circle"></i> Save All Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle month range generation
+    document.getElementById('generateMonths').addEventListener('click', async function() {
+        const startMonth = document.getElementById('startMonth').value;
+        const endMonth = document.getElementById('endMonth').value;
+        
+        if (!startMonth || !endMonth) {
+            alert('Please select both start and end months');
+            return;
+        }
+        
+        if (startMonth > endMonth) {
+            alert('Start month must be before or equal to end month');
+            return;
+        }
+        
+        try {
+            const response = await fetch('{{ url_for("product_loading.api_generate_months") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    start_month: startMonth,
+                    end_month: endMonth
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.months) {
+                regenerateMonthRows(data.months);
+            } else {
+                alert('Error generating months: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to generate months');
+        }
+    });
+    
+    // Function to regenerate month rows
+    function regenerateMonthRows(months) {
+        const tbody = document.getElementById('monthRows');
+        const itemTypes = {{ item_types|tojson }};
+        const loadingMatrix = {{ loading_matrix|tojson }};
+        
+        tbody.innerHTML = '';
+        
+        months.forEach(month => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-month', month);
+            
+            // Month cell
+            const monthCell = document.createElement('td');
+            monthCell.className = 'align-middle';
+            monthCell.innerHTML = `<strong>${month}</strong>`;
+            tr.appendChild(monthCell);
+            
+            // Resource type cells
+            itemTypes.forEach(itemType => {
+                const existing = (loadingMatrix[month] && loadingMatrix[month][itemType.typename]) || {};
+                
+                // Quantity cell
+                const qtyCell = document.createElement('td');
+                qtyCell.style.width = '120px';
+                qtyCell.innerHTML = `
+                    <input type="number" 
+                           class="form-control form-control-sm" 
+                           name="loading[${month}][${itemType.typename}]"
+                           step="0.1"
+                           min="0"
+                           placeholder="0"
+                           value="${existing.quantity || ''}">
+                `;
+                tr.appendChild(qtyCell);
+                
+                // Notes cell
+                const notesCell = document.createElement('td');
+                notesCell.style.width = '200px';
+                notesCell.innerHTML = `
+                    <input type="text" 
+                           class="form-control form-control-sm" 
+                           name="notes[${month}][${itemType.typename}]"
+                           placeholder="Optional notes"
+                           value="${existing.notes || ''}">
+                `;
+                tr.appendChild(notesCell);
+            });
+            
+            tbody.appendChild(tr);
+        });
+    }
+    
+    // Add keyboard shortcuts for better data entry
+    document.getElementById('loadingTable').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+            e.preventDefault();
+            const inputs = Array.from(this.querySelectorAll('input[type="number"], input[type="text"]'));
+            const currentIndex = inputs.indexOf(e.target);
+            
+            if (currentIndex < inputs.length - 1) {
+                inputs[currentIndex + 1].focus();
+                inputs[currentIndex + 1].select();
+            }
+        }
+    });
+    
+    // Warn before leaving with unsaved changes
+    let formChanged = false;
+    document.getElementById('loadingForm').addEventListener('change', function() {
+        formChanged = true;
+    });
+    
+    window.addEventListener('beforeunload', function(e) {
+        if (formChanged) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+    
+    document.getElementById('loadingForm').addEventListener('submit', function() {
+        formChanged = false;
+    });
+});
+</script>
+
+<style>
+/* Make the table more compact and easier to scan */
+#loadingTable input {
+    font-size: 0.9em;
+}
+
+#loadingTable tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Highlight month column */
+#loadingTable td:first-child {
+    background-color: #f8f9fa;
+    font-weight: 500;
+}
+</style>
+
+{% endblock %}

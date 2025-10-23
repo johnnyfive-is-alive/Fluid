@@ -1,72 +1,144 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2 class="mb-3">Usage: {{ product['itemname'] }}</h2>
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-basket"></i> Product: {{ product.itemname }}
+            </h2>
+            <div>
+                <!-- Loading Profile button (NEW!) -->
+                <a href="{{ url_for('product_loading.view_product_loading', product_id=product.id) }}"
+                   class="btn btn-primary">
+                    <i class="bi bi-calendar-check"></i> Loading Profile
+                </a>
 
-<!-- Loading Statistics with Chart -->
-<div class="card">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0">Loading Allocation Over Time</h5>
-    </div>
-    <div class="card-body">
-        {% if loading_stats['total_records'] > 0 %}
+                <!-- Map Items button -->
+                <a href="{{ url_for('products.map_form', product_id=product.id) }}"
+                   class="btn btn-success">
+                    <i class="bi bi-link-45deg"></i> Map Items
+                </a>
 
-        <!-- Summary Stats -->
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <h6>Cumulative Allocation:</h6>
-                <p class="lead mb-0">{{ '%.1f' % loading_stats['total_percent'] }}%</p>
+                <!-- Back button -->
+                <a href="{{ url_for('products.list_products') }}"
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Products
+                </a>
             </div>
         </div>
 
-        <!-- Chart Canvas -->
-        <div class="mb-3">
-            <canvas id="loadingChart" style="max-height: 400px;"></canvas>
+        <!-- Summary Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h3 class="display-4">{{ mapped_items|length }}</h3>
+                        <p class="text-muted mb-0">Items Using This Product</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h3 class="display-4">{{ loading_stats['total_records'] }}</h3>
+                        <p class="text-muted mb-0">Loading Records</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h3 class="display-4">{{ loading_stats['month_count'] }}</h3>
+                        <p class="text-muted mb-0">Months Tracked</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Detailed Table -->
-        <div class="table-responsive">
-            <table class="table table-sm table-striped">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Month</th>
-                        <th>Item</th>
-                        <th class="text-end">Allocation %</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for record in loading_details %}
-                    <tr>
-                        <td><strong>{{ record['monthyear'] }}</strong></td>
-                        <td>{{ record['itemname'] }}</td>
-                        <td class="text-end">{{ '%.1f' % record['percent'] }}%</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Items using this product -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Items Working on This Product</h5>
+            </div>
+            <div class="card-body">
+                {% if mapped_items %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Item Name</th>
+                                <th>Type</th>
+                                <th>Loading Records</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in mapped_items %}
+                            <tr>
+                                <td><strong>{{ item['itemname'] }}</strong></td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ item['typename'] }}</span>
+                                </td>
+                                <td>{{ item['loading_count'] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle"></i>
+                    To change which items can use this product, click the "Map Items" button above.
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    No items are currently using this product.
+                    <a href="{{ url_for('products.map_form', product_id=product.id) }}" class="alert-link">
+                        Click here to map items.
+                    </a>
+                </div>
+                {% endif %}
+            </div>
         </div>
 
-        {% else %}
-        <div class="alert alert-info mb-0">
-            <i class="bi bi-info-circle"></i>
-            No loading allocations have been made for this product yet.
-            Use the <a href="{{ url_for('loading.grid_selector') }}" class="alert-link">Loading Grid</a>
-            to assign capacity.
+        <!-- Loading Details Chart and Table -->
+        {% if loading_details %}
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Loading Distribution Over Time</h5>
+            </div>
+            <div class="card-body">
+                <!-- Chart -->
+                <canvas id="loadingChart" height="80"></canvas>
+
+                <!-- Detailed table -->
+                <div class="table-responsive mt-4">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Item</th>
+                                <th class="text-end">Percent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for detail in loading_details %}
+                            <tr>
+                                <td>{{ detail.monthyear }}</td>
+                                <td>{{ detail.itemname }}</td>
+                                <td class="text-end">{{ "%.1f"|format(detail.percent) }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Action Buttons -->
-<div class="mt-4">
-    <a href="{{ url_for('products.list_products') }}" class="btn btn-secondary">
-        <i class="bi bi-arrow-left"></i> Back to Products
-    </a>
-    <a href="{{ url_for('loading.grid_selector') }}" class="btn btn-primary">
-        <i class="bi bi-grid-3x3"></i> Go to Loading Grid
-    </a>
-</div>
-
-{% if loading_stats['total_records'] > 0 %}
+{% if loading_details %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -88,14 +160,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const months = Object.keys(monthlyData).sort();
     const itemArray = Array.from(items).sort();
 
-    // Create datasets for each item
+    // Create datasets for each item (stacked bars)
     const colors = [
         'rgba(54, 162, 235, 0.8)',
         'rgba(255, 99, 132, 0.8)',
         'rgba(75, 192, 192, 0.8)',
         'rgba(255, 206, 86, 0.8)',
         'rgba(153, 102, 255, 0.8)',
-        'rgba(255, 159, 64, 0.8)'
+        'rgba(255, 159, 64, 0.8)',
+        'rgba(199, 199, 199, 0.8)',
+        'rgba(83, 102, 255, 0.8)',
+        'rgba(255, 99, 255, 0.8)',
+        'rgba(99, 255, 132, 0.8)'
     ];
 
     const datasets = itemArray.map((item, idx) => {
@@ -108,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     });
 
-    // Create the chart
+    // Create the stacked bar chart
     const ctx = document.getElementById('loadingChart').getContext('2d');
     new Chart(ctx, {
         type: 'bar',
@@ -123,45 +199,66 @@ document.addEventListener('DOMContentLoaded', function() {
                 title: {
                     display: true,
                     text: 'Loading Allocation by Item and Month (%)',
-                    font: { size: 16 }
+                    font: { size: 18, weight: 'bold' }
                 },
                 legend: {
                     display: true,
-                    position: 'top'
+                    position: 'right',
+                    labels: {
+                        font: { size: 14 }
+                    }
                 },
                 tooltip: {
+                    mode: 'index',
+                    intersect: false,
                     callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                        footer: function(tooltipItems) {
+                            let sum = 0;
+                            tooltipItems.forEach(function(tooltipItem) {
+                                sum += tooltipItem.parsed.y;
+                            });
+                            return 'Total: ' + sum.toFixed(1) + '%';
                         }
                     }
                 }
             },
             scales: {
                 x: {
-                    stacked: false,
+                    stacked: true,
                     title: {
                         display: true,
-                        text: 'Month'
+                        text: 'Month',
+                        font: { size: 14, weight: 'bold' }
+                    },
+                    ticks: {
+                        font: { size: 12 }
                     }
                 },
                 y: {
-                    stacked: false,
+                    stacked: true,
                     beginAtZero: true,
+                    max: 100,
                     title: {
                         display: true,
-                        text: 'Allocation %'
+                        text: 'Loading Percentage (%)',
+                        font: { size: 14, weight: 'bold' }
                     },
                     ticks: {
+                        font: { size: 12 },
                         callback: function(value) {
                             return value + '%';
                         }
                     }
                 }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
             }
         }
     });
 });
 </script>
 {% endif %}
+
 {% endblock %}
