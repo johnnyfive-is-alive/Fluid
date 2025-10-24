@@ -1,0 +1,725 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-sliders"></i> Enhanced Product Requirements: {{ product.itemname }}
+                </h2>
+                <div>
+                    <a href="{{ url_for('product_requirements.view_product_requirements', product_id=product.id) }}" 
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Standard View
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions Card -->
+    <div class="alert alert-info">
+        <h5 class="alert-heading"><i class="bi bi-info-circle"></i> How to Use This Page</h5>
+        <ol class="mb-0">
+            <li><strong>Filter Items:</strong> Use the filters below to narrow down items by type and characteristics</li>
+            <li><strong>Select Items:</strong> Check the boxes next to items you want to require to this product</li>
+            <li><strong>Set Date Range:</strong> Choose start and end months for your requirement period</li>
+            <li><strong>Generate Grid:</strong> Click "Generate Requirements Grid" to create the requirement table</li>
+            <li><strong>Enter Percentages:</strong> For each item and month, enter the percentage (0-100) required to this product</li>
+            <li><strong>Save:</strong> Click "Save All Requirements" when finished</li>
+        </ol>
+    </div>
+
+    <!-- STEP 1: Filters Card -->
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-funnel"></i> Step 1: Filter Items (Optional)</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Use these filters to find specific items. 
+                For example, filter by "RESOURCE" type and "Location" characteristic to find all resources in a specific location.
+                Leave filters blank to see all items.
+            </p>
+            
+            <div class="row g-3">
+                <!-- Item Type Filter -->
+                <div class="col-md-3">
+                    <label for="itemtype_filter" class="form-label fw-bold">Item Type</label>
+                    <select class="form-select" id="itemtype_filter">
+                        <option value="">All Types</option>
+                        {% for itemtype in item_types %}
+                        <option value="{{ itemtype['id'] }}">{{ itemtype['typename'] }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Filter by RESOURCE, STATION, or UNIT</small>
+                </div>
+
+                <!-- Characteristic Key Filter -->
+                <div class="col-md-3">
+                    <label for="char_key_filter" class="form-label fw-bold">Characteristic Name</label>
+                    <select class="form-select" id="char_key_filter">
+                        <option value="">No Characteristic Filter</option>
+                        {% for key in char_keys %}
+                        <option value="{{ key }}">{{ key }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">e.g., Location, Capacity, Skill</small>
+                </div>
+
+                <!-- Characteristic Value Filter -->
+                <div class="col-md-3">
+                    <label for="char_value_filter" class="form-label fw-bold">Characteristic Value</label>
+                    <input type="text" class="form-control" id="char_value_filter" 
+                           placeholder="e.g., Ottawa" disabled>
+                    <small class="text-muted">Enter the value to match</small>
+                </div>
+
+                <!-- Item Name Search -->
+                <div class="col-md-3">
+                    <label for="itemname_filter" class="form-label fw-bold">Item Name Search</label>
+                    <input type="text" class="form-control" id="itemname_filter" 
+                           placeholder="Search by name...">
+                    <small class="text-muted">Partial matches work</small>
+                </div>
+            </div>
+
+            <div class="row mt-3">
+                <div class="col-12">
+                    <button class="btn btn-primary" id="apply_filters_btn">
+                        <i class="bi bi-search"></i> Apply Filters
+                    </button>
+                    <button class="btn btn-secondary ms-2" id="clear_filters_btn">
+                        <i class="bi bi-x-circle"></i> Clear All Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 2: Item Selection Card -->
+    <div class="card mb-3">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">
+                <i class="bi bi-check2-square"></i> Step 2: Select Items to Require
+                <span class="badge bg-light text-dark ms-2" id="selected_count_badge">0 selected</span>
+            </h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Select multiple items that will be working on this product. 
+                Items will be grouped by type in the requirement grid.
+            </p>
+
+            <div class="mb-3">
+                <button class="btn btn-sm btn-outline-primary me-2" id="select_all_btn">
+                    <i class="bi bi-check-all"></i> Select All Visible
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="deselect_all_btn">
+                    <i class="bi bi-x"></i> Deselect All
+                </button>
+            </div>
+
+            <!-- Loading indicator -->
+            <div id="loading_items" class="text-center d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading items...</span>
+                </div>
+                <p class="text-muted mt-2">Loading items...</p>
+            </div>
+
+            <!-- Items list -->
+            <div id="items_list" class="row g-2" style="max-height: 400px; overflow-y: auto;">
+                <div class="col-12 text-center text-muted">
+                    <p>Click "Apply Filters" above to load items, or leave filters blank and click to see all items.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3: Date Range and Grid Generation Card -->
+    <div class="card mb-3">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="bi bi-calendar-range"></i> Step 3: Set Date Range & Generate Grid</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> Choose the start and end months for your requirement period. 
+                You can select future months to plan ahead.
+            </p>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label for="start_month" class="form-label fw-bold">Start Month</label>
+                    <input type="month" class="form-control" id="start_month" value="{{ default_months[0] }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="end_month" class="form-label fw-bold">End Month</label>
+                    <input type="month" class="form-control" id="end_month" value="{{ default_months[-1] }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">&nbsp;</label>
+                    <button class="btn btn-warning w-100 btn-lg" id="generate_grid_btn">
+                        <i class="bi bi-grid-3x3"></i> Generate Requirements Grid
+                    </button>
+                </div>
+            </div>
+
+            <div class="alert alert-warning" id="generation_message" style="display: none;">
+                <i class="bi bi-exclamation-triangle"></i> <span id="generation_message_text"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 4: Requirement Grid Card -->
+    <div class="card mb-3" id="requirement_card" style="display: none;">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-table"></i> Step 4: Enter Requirement Percentages</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                <i class="bi bi-lightbulb"></i> <strong>Instructions:</strong> Enter the percentage (0-100) for each item and month. 
+                Items are grouped by type, and their characteristics are shown in brackets. 
+                Leave blank or enter 0 to remove an requirement.
+            </p>
+
+            <!-- The grid will be generated here -->
+            <div id="requirement_grid_container">
+                <p class="text-center text-muted">Generate the grid above to start allocating.</p>
+            </div>
+
+            <!-- Save button -->
+            <div class="mt-4">
+                <button class="btn btn-success btn-lg w-100" id="save_requirements_btn" disabled>
+                    <i class="bi bi-save"></i> Save All Requirements
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Existing Requirements Summary -->
+    {% if existing_requirements %}
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h6 class="mb-0"><i class="bi bi-list-check"></i> Current Requirements for {{ product.itemname }}</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>Item</th>
+                            <th>Type</th>
+                            <th>Month</th>
+                            <th class="text-end">Percent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alloc in existing_requirements %}
+                        <tr>
+                            <td>{{ alloc['itemname'] }}</td>
+                            <td><span class="badge bg-secondary">{{ alloc['typename'] }}</span></td>
+                            <td>{{ alloc['monthyear'] }}</td>
+                            <td class="text-end">
+                                <span class="badge bg-primary">{{ "%.1f"|format(alloc['percent']) }}%</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+const productId = {{ product.id }};
+let selectedItems = new Set();
+let allItemsData = []; // Store all loaded items with their characteristics
+let generatedMonths = [];
+let requirementData = {};
+
+// DOM elements
+const itemTypeFilter = document.getElementById('itemtype_filter');
+const charKeyFilter = document.getElementById('char_key_filter');
+const charValueFilter = document.getElementById('char_value_filter');
+const itemnameFilter = document.getElementById('itemname_filter');
+const applyFiltersBtn = document.getElementById('apply_filters_btn');
+const clearFiltersBtn = document.getElementById('clear_filters_btn');
+const itemsList = document.getElementById('items_list');
+const loadingItems = document.getElementById('loading_items');
+const selectedCountBadge = document.getElementById('selected_count_badge');
+const selectAllBtn = document.getElementById('select_all_btn');
+const deselectAllBtn = document.getElementById('deselect_all_btn');
+const startMonth = document.getElementById('start_month');
+const endMonth = document.getElementById('end_month');
+const generateGridBtn = document.getElementById('generate_grid_btn');
+const generationMessage = document.getElementById('generation_message');
+const generationMessageText = document.getElementById('generation_message_text');
+const requirementCard = document.getElementById('requirement_card');
+const requirementGridContainer = document.getElementById('requirement_grid_container');
+const saveRequirementsBtn = document.getElementById('save_requirements_btn');
+
+// Enable characteristic value filter when key is selected
+charKeyFilter.addEventListener('change', function() {
+    charValueFilter.disabled = !this.value;
+    if (!this.value) {
+        charValueFilter.value = '';
+    }
+});
+
+// Clear all filters
+clearFiltersBtn.addEventListener('click', function() {
+    itemTypeFilter.value = '';
+    charKeyFilter.value = '';
+    charValueFilter.value = '';
+    charValueFilter.disabled = true;
+    itemnameFilter.value = '';
+    itemsList.innerHTML = '<div class="col-12 text-center text-muted"><p>Click "Apply Filters" to load items.</p></div>';
+    selectedItems.clear();
+    updateSelectedCount();
+});
+
+// Apply filters and load items
+applyFiltersBtn.addEventListener('click', function() {
+    loadingItems.classList.remove('d-none');
+    itemsList.innerHTML = '';
+    
+    const formData = new FormData();
+    if (itemTypeFilter.value) formData.append('itemtype_id', itemTypeFilter.value);
+    if (charKeyFilter.value) formData.append('char_key', charKeyFilter.value);
+    if (charValueFilter.value) formData.append('char_value', charValueFilter.value);
+    if (itemnameFilter.value) formData.append('itemname_filter', itemnameFilter.value);
+    
+    fetch(`/product-requirements/${productId}/filter-items`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        loadingItems.classList.add('d-none');
+        if (data.success) {
+            // Fetch characteristics for each item
+            Promise.all(data.items.map(item => fetchItemCharacteristics(item.id)))
+                .then(characteristicsArray => {
+                    allItemsData = data.items.map((item, index) => ({
+                        ...item,
+                        characteristics: characteristicsArray[index]
+                    }));
+                    displayItems(allItemsData);
+                });
+        } else {
+            itemsList.innerHTML = `<div class="col-12"><div class="alert alert-danger">Error: ${data.error}</div></div>`;
+        }
+    })
+    .catch(error => {
+        loadingItems.classList.add('d-none');
+        console.error('Error:', error);
+        itemsList.innerHTML = '<div class="col-12"><div class="alert alert-danger">Error loading items</div></div>';
+    });
+});
+
+// Fetch characteristics for a single item
+async function fetchItemCharacteristics(itemId) {
+    try {
+        const response = await fetch(`/product-requirements/${productId}/get-item-characteristics/${itemId}`);
+        const data = await response.json();
+        return data.success ? data.characteristics : [];
+    } catch (error) {
+        console.error(`Error fetching characteristics for item ${itemId}:`, error);
+        return [];
+    }
+}
+
+// Display items with checkboxes, grouped by type
+function displayItems(items) {
+    if (items.length === 0) {
+        itemsList.innerHTML = '<div class="col-12 text-center text-muted"><p>No items found matching your filters.</p></div>';
+        return;
+    }
+    
+    // Group items by type
+    const itemsByType = {};
+    items.forEach(item => {
+        if (!itemsByType[item.typename]) {
+            itemsByType[item.typename] = [];
+        }
+        itemsByType[item.typename].push(item);
+    });
+    
+    let html = '';
+    Object.keys(itemsByType).sort().forEach(typename => {
+        html += `
+            <div class="col-12">
+                <h6 class="mt-3 mb-2 text-primary"><i class="bi bi-folder"></i> ${typename}</h6>
+            </div>
+        `;
+        
+        itemsByType[typename].forEach(item => {
+            const isChecked = selectedItems.has(item.id);
+            const charText = item.characteristics && item.characteristics.length > 0
+                ? item.characteristics.map(c => `${c.itemkey}:${c.itemvalue}`).join(', ')
+                : 'No characteristics';
+            
+            html += `
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 ${isChecked ? 'border-primary' : ''}">
+                        <div class="card-body p-2">
+                            <div class="form-check">
+                                <input class="form-check-input item-checkbox" 
+                                       type="checkbox" 
+                                       value="${item.id}" 
+                                       id="item_${item.id}"
+                                       data-itemname="${item.itemname}"
+                                       data-typename="${item.typename}"
+                                       data-characteristics="${charText}"
+                                       ${isChecked ? 'checked' : ''}>
+                                <label class="form-check-label" for="item_${item.id}">
+                                    <strong>${item.itemname}</strong>
+                                    <br>
+                                    <small class="text-muted">${charText}</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    });
+    
+    itemsList.innerHTML = html;
+    
+    // Add event listeners
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                selectedItems.add(parseInt(this.value));
+                this.closest('.card').classList.add('border-primary');
+            } else {
+                selectedItems.delete(parseInt(this.value));
+                this.closest('.card').classList.remove('border-primary');
+            }
+            updateSelectedCount();
+        });
+    });
+}
+
+// Update selected count badge
+function updateSelectedCount() {
+    selectedCountBadge.textContent = `${selectedItems.size} selected`;
+}
+
+// Select all visible items
+selectAllBtn.addEventListener('click', function() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+        selectedItems.add(parseInt(checkbox.value));
+        checkbox.closest('.card').classList.add('border-primary');
+    });
+    updateSelectedCount();
+});
+
+// Deselect all items
+deselectAllBtn.addEventListener('click', function() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+        selectedItems.delete(parseInt(checkbox.value));
+        checkbox.closest('.card').classList.remove('border-primary');
+    });
+    updateSelectedCount();
+});
+
+// Generate loading grid
+generateGridBtn.addEventListener('click', function() {
+    generationMessage.style.display = 'none';
+    
+    // Validate selections
+    if (selectedItems.size === 0) {
+        generationMessage.style.display = 'block';
+        generationMessageText.textContent = 'Please select at least one item first.';
+        return;
+    }
+    
+    const start = startMonth.value;
+    const end = endMonth.value;
+    
+    if (!start || !end) {
+        generationMessage.style.display = 'block';
+        generationMessageText.textContent = 'Please select both start and end months.';
+        return;
+    }
+    
+    if (start > end) {
+        generationMessage.style.display = 'block';
+        generationMessageText.textContent = 'Start month must be before or equal to end month.';
+        return;
+    }
+    
+    // Generate months
+    generatedMonths = generateMonthRange(start, end);
+    
+    // Build the grid
+    buildRequirementGrid();
+    
+    // Show the requirement card
+    requirementCard.style.display = 'block';
+    
+    // Scroll to the grid
+    requirementCard.scrollIntoView({ behavior: 'smooth' });
+});
+
+// Generate month range array
+function generateMonthRange(start, end) {
+    const months = [];
+    let current = new Date(start + '-01');
+    const endDate = new Date(end + '-01');
+    
+    while (current <= endDate) {
+        const year = current.getFullYear();
+        const month = String(current.getMonth() + 1).padStart(2, '0');
+        months.push(`${year}-${month}`);
+        current.setMonth(current.getMonth() + 1);
+    }
+    
+    return months;
+}
+
+// Build requirement grid grouped by item type
+function buildRequirementGrid() {
+    // Group selected items by type
+    const selectedItemsData = allItemsData.filter(item => selectedItems.has(item.id));
+    const itemsByType = {};
+    
+    selectedItemsData.forEach(item => {
+        if (!itemsByType[item.typename]) {
+            itemsByType[item.typename] = [];
+        }
+        itemsByType[item.typename].push(item);
+    });
+    
+    let html = '';
+    
+    // Create a grid for each item type
+    Object.keys(itemsByType).sort().forEach(typename => {
+        const items = itemsByType[typename];
+        
+        html += `
+            <div class="mb-4">
+                <h5 class="bg-light p-2 rounded">
+                    <i class="bi bi-folder2-open"></i> ${typename}
+                    <span class="badge bg-secondary ms-2">${items.length} item(s)</span>
+                </h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="min-width: 200px;">Item [Characteristics]</th>
+        `;
+        
+        // Month headers
+        generatedMonths.forEach(month => {
+            html += `<th class="text-center" style="min-width: 100px;">${month}</th>`;
+        });
+        
+        html += `
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        // Row for each item
+        items.forEach(item => {
+            const charText = item.characteristics && item.characteristics.length > 0
+                ? '[' + item.characteristics.map(c => `${c.itemkey}:${c.itemvalue}`).join(', ') + ']'
+                : '';
+            
+            html += `
+                <tr>
+                    <td>
+                        <strong>${item.itemname}</strong>
+                        <br>
+                        <small class="text-muted">${charText}</small>
+                    </td>
+            `;
+            
+            generatedMonths.forEach(month => {
+                const key = `${item.id}_${month}`;
+                const value = requirementData[key] || '';
+                html += `
+                    <td class="p-1">
+                        <input type="number" 
+                               class="form-control form-control-sm text-end requirement-input" 
+                               data-item="${item.id}" 
+                               data-month="${month}"
+                               value="${value}" 
+                               placeholder="%" 
+                               min="0" 
+                               max="100" 
+                               step="0.1">
+                    </td>
+                `;
+            });
+            
+            html += `</tr>`;
+        });
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    });
+    
+    requirementGridContainer.innerHTML = html;
+    
+    // Add event listeners to inputs
+    document.querySelectorAll('.requirement-input').forEach(input => {
+        input.addEventListener('change', function() {
+            const key = `${this.dataset.item}_${this.dataset.month}`;
+            requirementData[key] = this.value;
+        });
+    });
+    
+    saveRequirementsBtn.disabled = false;
+    
+    // Load existing requirements
+    loadExistingRequirements();
+}
+
+// Load existing requirements for selected items and months
+function loadExistingRequirements() {
+    if (selectedItems.size === 0 || generatedMonths.length === 0) return;
+    
+    generatedMonths.forEach(month => {
+        const formData = new FormData();
+        formData.append('month', month);
+        Array.from(selectedItems).forEach(id => {
+            formData.append('item_ids[]', id);
+        });
+        
+        fetch(`/product-requirements/${productId}/get-requirements`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Object.entries(data.requirements).forEach(([itemId, percent]) => {
+                    const input = document.querySelector(`input[data-item="${itemId}"][data-month="${month}"]`);
+                    if (input) {
+                        input.value = percent;
+                        requirementData[`${itemId}_${month}`] = percent;
+                    }
+                });
+            }
+        })
+        .catch(error => console.error('Error loading requirements:', error));
+    });
+}
+
+// Save all requirements
+saveRequirementsBtn.addEventListener('click', function() {
+    if (selectedItems.size === 0 || generatedMonths.length === 0) {
+        alert('No requirements to save');
+        return;
+    }
+    
+    // Collect all requirement data from inputs
+    const requirements = [];
+    document.querySelectorAll('.requirement-input').forEach(input => {
+        const itemId = parseInt(input.dataset.item);
+        const month = input.dataset.month;
+        const percent = input.value ? parseFloat(input.value) : 0;
+        
+        requirements.push({
+            item_id: itemId,
+            month: month,
+            percent: percent
+        });
+    });
+    
+    if (requirements.length === 0) {
+        alert('No requirements to save');
+        return;
+    }
+    
+    if (!confirm(`Save ${requirements.length} requirement entries?`)) {
+        return;
+    }
+    
+    // Disable button and show loading
+    saveRequirementsBtn.disabled = true;
+    saveRequirementsBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+    
+    fetch(`/product-requirements/${productId}/save-requirements`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requirements)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error saving requirements: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving requirements');
+    })
+    .finally(() => {
+        saveRequirementsBtn.disabled = false;
+        saveRequirementsBtn.innerHTML = '<i class="bi bi-save"></i> Save All Requirements';
+    });
+});
+
+// Load items on page load (show all)
+window.addEventListener('DOMContentLoaded', function() {
+    applyFiltersBtn.click();
+});
+</script>
+
+<style>
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.requirement-input {
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+.card {
+    transition: all 0.2s;
+}
+
+.card:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.form-check-input:checked + .form-check-label {
+    font-weight: bold;
+}
+
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+    .requirement-input {
+        font-size: 0.8rem;
+    }
+}
+</style>
+{% endblock %}

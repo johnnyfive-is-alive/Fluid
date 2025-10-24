@@ -4,46 +4,134 @@ Helps AI understand formatting conventions and business rules.
 """
 
 TABLE_METADATA = {
+    'productrequirements': {
+        'description': 'Product-specific item requirements by month (what items are REQUIRED/PLANNED)',
+        'capitalization': 'N/A',
+        'columns': {
+            'id': {
+                'description': 'Primary key',
+                'format': 'Integer',
+            },
+            'fkproduct': {
+                'description': 'Foreign key to items (product type)',
+                'format': 'Integer',
+                'notes': 'Product that requires these items',
+            },
+            'fkitem': {
+                'description': 'Foreign key to items (specific item required)',
+                'format': 'Integer',
+                'notes': 'Specific item needed (e.g., John Doe, Machine-5, not just RESOURCE or STATION)',
+            },
+            'monthyear': {
+                'description': 'Month in YYYY-MM format',
+                'format': 'YYYY-MM',
+                'examples': ['2025-01', '2025-12', '2024-09'],
+                'validation': 'Must match pattern YYYY-MM with valid year/month',
+            },
+            'percent': {
+                'description': 'Percentage requirement (0-100)',
+                'format': 'Decimal',
+                'range': '0 to 100',
+                'examples': [14.5, 50.0, 100.0],
+                'notes': 'Represents what percentage of this item is required for this product',
+            },
+            'notes': {
+                'description': 'Optional notes or explanation',
+                'format': 'Text',
+                'examples': ['Critical for Q1 delivery', 'Peak season requirement', 'Backup resource'],
+            },
+        },
+        'constraints': [
+            'Unique constraint on (fkproduct, fkitem, monthyear)',
+            'One requirement per product-item-month combination',
+        ],
+        'business_rules': [
+            'Percent must be 0-100',
+            'Represents what SPECIFIC ITEMS are required/planned for products',
+            'Different from itemloading which tracks ACTUAL allocations',
+            'Stores fkitem (specific items) not fkitemtype (generic types)',
+            'Used for requirement planning and gap analysis',
+            'Compare productrequirements (plan) vs itemloading (actual) to identify gaps',
+        ],
+        'common_queries': [
+            'What specific items are required for Product A in January?',
+            'Which products require John Doe?',
+            'What are the monthly requirements for a specific product?',
+            'Compare requirements vs actual allocations to find gaps',
+            'Items that are required but not allocated',
+            'Items that are allocated but not required (excess)',
+            'Total requirements by item type across all products',
+        ],
+        'relationship_notes': [
+            'productrequirements specifies WHAT specific items are needed (the plan)',
+            'itemloading tracks HOW specific items are actually allocated (the reality)',
+            'Join both tables to compare planned vs actual and identify gaps',
+            'Example: productrequirements says need John Doe at 50%, itemloading shows he is allocated at 30% = 20% gap',
+        ],
+        'examples': [
+            {
+                'scenario': 'Product A requires John Doe (RESOURCE) at 50% in January 2025',
+                'data': {
+                    'fkproduct': 10,
+                    'fkitem': 25,
+                    'monthyear': '2025-01',
+                    'percent': 50.0,
+                    'notes': 'Lead developer for Q1 milestone',
+                },
+            },
+            {
+                'scenario': 'Product B requires Machine-5 (STATION) at 100% in February 2025',
+                'data': {
+                    'fkproduct': 11,
+                    'fkitem': 45,
+                    'monthyear': '2025-02',
+                    'percent': 100.0,
+                    'notes': 'Full capacity needed for production run',
+                },
+            },
+        ],
+    },
+
     'productloading': {
         'description': 'Product resource requirements by month and item type (percentage-based)',
         'capitalization': 'N/A',
         'columns': {
             'id': {
                 'description': 'Primary key',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'fkproduct': {
                 'description': 'Foreign key to items (product type)',
                 'format': 'Integer',
-                'notes': 'Product that needs resources'
+                'notes': 'Product that needs resources',
             },
             'fkitemtype': {
                 'description': 'Foreign key to itemtypes',
                 'format': 'Integer',
-                'notes': 'Type of resource needed (RESOURCE, STATION, UNIT, etc.)'
+                'notes': 'Type of resource needed (RESOURCE, STATION, UNIT, etc.)',
             },
             'monthyear': {
                 'description': 'Month in YYYY-MM format',
                 'format': 'YYYY-MM',
                 'examples': ['2025-01', '2025-12', '2024-09'],
-                'validation': 'Must match pattern YYYY-MM with valid year/month'
+                'validation': 'Must match pattern YYYY-MM with valid year/month',
             },
             'percent': {
                 'description': 'Percentage requirement (0-100+)',
                 'format': 'Decimal',
                 'range': '0 or greater',
                 'examples': [14.5, 50.0, 100.0, 250.0],
-                'notes': 'Represents percentage of capacity needed. Can exceed 100% for aggregate requirements (e.g., need 2.5 stations = 250%)'
+                'notes': 'Represents percentage of capacity needed. Can exceed 100% for aggregate requirements (e.g., need 2.5 stations = 250%)',
             },
             'notes': {
                 'description': 'Optional notes or explanation',
                 'format': 'Text',
-                'examples': ['Ramp-up phase', 'Peak season', 'Reduced capacity']
-            }
+                'examples': ['Ramp-up phase', 'Peak season', 'Reduced capacity'],
+            },
         },
         'constraints': [
             'Unique constraint on (fkproduct, fkitemtype, monthyear)',
-            'One requirement per product-itemtype-month combination'
+            'One requirement per product-itemtype-month combination',
         ],
         'business_rules': [
             'Percent must be >= 0',
@@ -51,7 +139,7 @@ TABLE_METADATA = {
             'Used for capacity planning and requirement tracking',
             'Different from itemloading which tracks actual item allocations',
             'Can exceed 100% since it represents aggregate requirements',
-            'Compare productloading (requirements) vs itemloading (actuals) to identify gaps'
+            'Compare productloading (requirements) vs itemloading (actuals) to identify gaps',
         ],
         'common_queries': [
             'Total resource requirements by month across all products',
@@ -59,14 +147,14 @@ TABLE_METADATA = {
             'Monthly requirements by resource type',
             'Compare requirements vs actual allocations (join with itemloading)',
             'Products with unmet requirements',
-            'Capacity shortfalls by month and resource type'
+            'Capacity shortfalls by month and resource type',
         ],
         'relationship_notes': [
             'productloading specifies WHAT percentage of each resource TYPE is needed',
             'itemloading tracks HOW specific items are allocated',
             'Use both tables to compare planned vs actual allocation',
-            'Example: productloading says need 150% STATION capacity, itemloading shows which specific stations are assigned'
-        ]
+            'Example: productloading says need 150% STATION capacity, itemloading shows which specific stations are assigned',
+        ],
     },
 
     'itemtypes': {
@@ -75,19 +163,19 @@ TABLE_METADATA = {
         'columns': {
             'id': {
                 'description': 'Primary key',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'typename': {
                 'description': 'Type name (always uppercase)',
                 'format': 'UPPERCASE',
                 'examples': ['STATION', 'RESOURCE', 'UNIT', 'PRODUCT'],
-                'validation': 'Must be unique and uppercase'
-            }
+                'validation': 'Must be unique and uppercase',
+            },
         },
         'common_queries': [
             'List all item types',
-            'Count items by type'
-        ]
+            'Count items by type',
+        ],
     },
 
     'items': {
@@ -96,7 +184,7 @@ TABLE_METADATA = {
         'columns': {
             'id': {
                 'description': 'Primary key',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'itemname': {
                 'description': 'Item name (capitalization depends on item type)',
@@ -107,26 +195,26 @@ TABLE_METADATA = {
                     'STATION': 'UPPERCASE - Station names are always uppercase (e.g., DV-SPYKER, DV-JAGUAR)',
                     'PRODUCT': 'UPPERCASE - Product names are always uppercase (e.g., BEEHIVE 300G, GENERIC 300L, UNALLOCATED)',
                     'RESOURCE': 'MIXED - Resource names may be mixed case (e.g., person names like Gabor Farkas)',
-                    'UNIT': 'MIXED - Unit names may be mixed case'
-                }
+                    'UNIT': 'MIXED - Unit names may be mixed case',
+                },
             },
             'fkitemtype': {
                 'description': 'Foreign key to itemtypes',
-                'format': 'Integer'
-            }
+                'format': 'Integer',
+            },
         },
         'business_rules': [
             'Stations (type=STATION) ALWAYS have UPPERCASE names',
             'Products (type=PRODUCT) ALWAYS have UPPERCASE names',
             'Resources (type=RESOURCE) may be person names in mixed case',
             'UNALLOCATED is a special system product',
-            'When filtering stations or products, use uppercase: WHERE itemname = \'DV-SPYKER\' or WHERE itemname LIKE \'%BEEHIVE%\''
+            'When filtering stations or products, use uppercase: WHERE itemname = \'DV-SPYKER\' or WHERE itemname LIKE \'%BEEHIVE%\'',
         ],
         'common_queries': [
             'List all items with their types',
             'Find items of a specific type',
-            'Search items by name pattern'
-        ]
+            'Search items by name pattern',
+        ],
     },
 
     'itemcharacteristics': {
@@ -135,36 +223,36 @@ TABLE_METADATA = {
         'columns': {
             'id': {
                 'description': 'Primary key',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'fkitem': {
                 'description': 'Foreign key to items',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'itemkey': {
                 'description': 'Characteristic name',
                 'format': 'Mixed case',
-                'examples': ['Location', 'Capacity', 'Status', 'Temperature']
+                'examples': ['Location', 'Capacity', 'Status', 'Temperature'],
             },
             'itemvalue': {
                 'description': 'Characteristic value',
                 'format': 'Mixed case or numeric',
-                'examples': ['Ottawa', '500', 'Active', '72.5']
+                'examples': ['Ottawa', '500', 'Active', '72.5'],
             },
             'itemkeyvaluetype': {
                 'description': 'Data type hint (optional)',
                 'format': 'Lowercase',
-                'examples': ['str', 'int', 'float', 'bool']
-            }
+                'examples': ['str', 'int', 'float', 'bool'],
+            },
         },
         'constraints': [
-            'Unique constraint on (fkitem, itemkey) - one key per item'
+            'Unique constraint on (fkitem, itemkey) - one key per item',
         ],
         'common_queries': [
             'Get all characteristics for an item',
             'Find items with specific characteristic values',
-            'List all unique characteristic keys'
-        ]
+            'List all unique characteristic keys',
+        ],
     },
 
     'itemloading': {
@@ -173,47 +261,47 @@ TABLE_METADATA = {
         'columns': {
             'id': {
                 'description': 'Primary key',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'fkitem': {
                 'description': 'Foreign key to items',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'dailyrollupexists': {
                 'description': 'Flag for daily data (0 or 1)',
                 'format': 'Boolean integer',
-                'values': [0, 1]
+                'values': [0, 1],
             },
             'monthyear': {
                 'description': 'Month in YYYY-MM format',
                 'format': 'YYYY-MM',
                 'examples': ['2025-01', '2025-12', '2024-09'],
-                'validation': 'Must match pattern YYYY-MM with valid year/month'
+                'validation': 'Must match pattern YYYY-MM with valid year/month',
             },
             'percent': {
                 'description': 'Loading percentage',
                 'format': 'Decimal',
                 'range': '0 to 100',
-                'examples': [14.5, 50.0, 100.0]
+                'examples': [14.5, 50.0, 100.0],
             },
             'fkproduct': {
                 'description': 'Foreign key to items (product type), NULL = UNALLOCATED',
                 'format': 'Integer or NULL',
-                'notes': 'NULL represents unallocated/inactive capacity'
-            }
+                'notes': 'NULL represents unallocated/inactive capacity',
+            },
         },
         'business_rules': [
             'Loading percentages for an item-month should sum to ≤100%',
             'NULL fkproduct represents UNALLOCATED/INACTIVE capacity',
             'Each row represents allocation to one product for one month',
-            'Multiple rows per item-month allowed (one per product)'
+            'Multiple rows per item-month allowed (one per product)',
         ],
         'common_queries': [
             'Total loading by product across months',
             'Items with loading >50% in any month',
             'Monthly loading trends for specific items',
-            'Unallocated capacity by month'
-        ]
+            'Unallocated capacity by month',
+        ],
     },
 
     'item_product_map': {
@@ -222,28 +310,28 @@ TABLE_METADATA = {
         'columns': {
             'fkitem': {
                 'description': 'Foreign key to items (non-product)',
-                'format': 'Integer'
+                'format': 'Integer',
             },
             'fkproduct': {
                 'description': 'Foreign key to items (product type)',
-                'format': 'Integer'
-            }
+                'format': 'Integer',
+            },
         },
         'constraints': [
             'Composite primary key on (fkitem, fkproduct)',
-            'Defines which items can work on which products'
+            'Defines which items can work on which products',
         ],
         'business_rules': [
             'An item can be mapped to multiple products',
             'Only items can be allocated to products via loading',
-            'Products themselves are not mapped to other products'
+            'Products themselves are not mapped to other products',
         ],
         'common_queries': [
             'Which products can an item work on?',
             'Which items are mapped to a product?',
-            'Items with no product mappings'
-        ]
-    }
+            'Items with no product mappings',
+        ],
+    },
 }
 
 

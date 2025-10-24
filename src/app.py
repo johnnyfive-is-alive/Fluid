@@ -79,7 +79,7 @@ def create_app() -> Flask:
     from blueprints.units import bp as units_bp
     from blueprints.availability import bp as availability_bp
     from blueprints.ai_query import bp as ai_query_bp
-    from blueprints.blueprint_product_loading import bp as productloading_bp
+    from blueprints.blueprint_product_requirements import bp as productrequirements_bp
 
     app.register_blueprint(characteristics_bp, url_prefix='/characteristics')
     app.register_blueprint(loading_bp, url_prefix='/loading')
@@ -91,8 +91,7 @@ def create_app() -> Flask:
     app.register_blueprint(units_bp, url_prefix='/units')
     app.register_blueprint(availability_bp, url_prefix='/availability')
     app.register_blueprint(ai_query_bp, url_prefix='/ai-query')
-    # FIXED: Remove url_prefix since blueprint defines it internally as '/product-loading'
-    app.register_blueprint(productloading_bp)
+    app.register_blueprint(productrequirements_bp)
 
     @app.get('/')
     def home():
