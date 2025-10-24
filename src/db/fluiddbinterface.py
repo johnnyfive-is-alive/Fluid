@@ -12,6 +12,7 @@ class VerificationDB:
       - itemcharacteristics: id (PK), fkitem, itemkey, itemvalue, itemkeyvaluetype
       - itemloading: id (PK), fkitem, dailyrollupexists, monthyear, percent, fkproduct (nullable)
       - item_product_map: fkitem, fkproduct (composite PK)
+      - productloading: id (PK), fkproduct, fkitemtype, monthyear, percent, notes
     """
 
     def __init__(self, path: str):
@@ -295,6 +296,16 @@ class VerificationDB:
         else:
             self.add_loading(fkitem, 0, monthyear, percent, fkproduct)
 
+    def upsert_item_loading(
+            self,
+            fkitem: int,
+            monthyear: str,
+            percent: float,
+            fkproduct: Optional[int] = None
+    ) -> None:
+        """Alias for upsert_loading for consistency."""
+        self.upsert_loading(fkitem, monthyear, percent, fkproduct)
+
     def get_loadings_for_items(
             self,
             item_ids: List[int]
@@ -458,7 +469,7 @@ class VerificationDB:
         return unallocated_id
 
     # ====================================================
-    # Product Loading Methods (add to fluiddbinterface.py)
+    # Product Loading Methods
     # ====================================================
 
     def add_product_loading(
@@ -466,14 +477,14 @@ class VerificationDB:
             fkproduct: int,
             fkitemtype: int,
             monthyear: str,
-            quantity: float,
+            percent: float,
             notes: Optional[str] = None,
     ) -> int:
         """Insert product loading requirement. Returns auto-generated id."""
         cur = self._execute(
-            'INSERT INTO "productloading" ("fkproduct","fkitemtype","monthyear","quantity","notes") '
+            'INSERT INTO "productloading" ("fkproduct","fkitemtype","monthyear","percent","notes") '
             'VALUES (?,?,?,?,?);',
-            (fkproduct, fkitemtype, monthyear, quantity, notes),
+            (fkproduct, fkitemtype, monthyear, percent, notes),
         )
         return cur.lastrowid
 
@@ -483,7 +494,7 @@ class VerificationDB:
             fkproduct: Optional[int] = None,
             fkitemtype: Optional[int] = None,
             monthyear: Optional[str] = None,
-            quantity: Optional[float] = None,
+            percent: Optional[float] = None,
             notes: Optional[str] = None,
     ) -> None:
         """Update product loading by id."""
@@ -492,7 +503,7 @@ class VerificationDB:
                 "fkproduct": fkproduct,
                 "fkitemtype": fkitemtype,
                 "monthyear": monthyear,
-                "quantity": quantity,
+                "percent": percent,
                 "notes": notes,
             }
         )
@@ -512,7 +523,7 @@ class VerificationDB:
             fkproduct: int,
             fkitemtype: int,
             monthyear: str,
-            quantity: float,
+            percent: float,
             notes: Optional[str] = None
     ) -> None:
         """Insert or update product loading requirement for product, item type, and month."""
@@ -524,11 +535,11 @@ class VerificationDB:
 
         if existing:
             self._execute(
-                'UPDATE "productloading" SET "quantity" = ?, "notes" = ? WHERE "id" = ?;',
-                (quantity, notes, existing["id"]),
+                'UPDATE "productloading" SET "percent" = ?, "notes" = ? WHERE "id" = ?;',
+                (percent, notes, existing["id"]),
             )
         else:
-            self.add_product_loading(fkproduct, fkitemtype, monthyear, quantity, notes)
+            self.add_product_loading(fkproduct, fkitemtype, monthyear, percent, notes)
 
     def list_product_loadings_for_product(self, fkproduct: int) -> Iterable[sqlite3.Row]:
         """Get all loading requirements for a product."""

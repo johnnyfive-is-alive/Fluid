@@ -204,15 +204,21 @@ def delete_product(id):
 @bp.get('/mappings/<int:id>')
 def view_mappings(id):
     """
-    View which items are using this product (either through explicit mappings or loading records).
-    Shows the item-product relationships and detailed loading statistics.
+    View which items are using this product (actual usage).
+    Shows product-item relationships and loading statistics with visualizations.
     """
     db = get_db()
 
-    # Get product info
+    # Get product details
     product = db.get_item_by_id(id)
     if not product:
         flash('Product not found.', 'danger')
+        return redirect(url_for('products.list_products'))
+
+    # Verify it's actually a product
+    itemtype = db.get_itemtype_by_id(product['fkitemtype'])
+    if not itemtype or itemtype['typename'] != 'PRODUCT':
+        flash('This item is not a product.', 'danger')
         return redirect(url_for('products.list_products'))
 
     # Get items that have loading records for this product (actual usage)
@@ -245,15 +251,18 @@ def view_mappings(id):
     loading_stats = db._execute(loading_query, (product_id_param, product_id_param)).fetchone()
 
     # Get detailed loading records for chart and table
+    # FIXED: Now includes typename for grouping by item type in the chart
     loading_details_query = '''
         SELECT 
             il.monthyear,
             i.itemname,
+            it.typename,
             il.percent
         FROM itemloading il
         JOIN items i ON il.fkitem = i.id
+        JOIN itemtypes it ON i.fkitemtype = it.id
         WHERE il.fkproduct = ? OR (il.fkproduct IS NULL AND ? IS NULL)
-        ORDER BY il.monthyear, i.itemname
+        ORDER BY il.monthyear, it.typename, i.itemname
     '''
     loading_details_rows = db._execute(loading_details_query, (product_id_param, product_id_param)).fetchall()
 
@@ -267,7 +276,6 @@ def view_mappings(id):
         loading_stats=loading_stats,
         loading_details=loading_details
     )
-
 
 @bp.get('/map/<int:product_id>')
 def map_form(product_id):

@@ -7,7 +7,7 @@
                 <i class="bi bi-basket"></i> Product: {{ product.itemname }}
             </h2>
             <div>
-                <!-- Enhanced Allocation Button (NEW!) -->
+                <!-- Enhanced Allocation Button -->
                 <a href="{{ url_for('product_loading.enhanced_allocation_interface', product_id=product.id) }}"
                    class="btn btn-warning">
                     <i class="bi bi-sliders"></i> Enhanced Allocation
@@ -111,7 +111,7 @@
         {% if loading_details %}
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Loading Timeline</h5>
+                <h5 class="mb-0">Loading Timeline by Item Type</h5>
             </div>
             <div class="card-body">
                 <canvas id="loadingChart" style="max-height: 400px;"></canvas>
@@ -130,6 +130,7 @@
                             <tr>
                                 <th>Month</th>
                                 <th>Item</th>
+                                <th>Type</th>
                                 <th class="text-end">Percentage</th>
                             </tr>
                         </thead>
@@ -138,6 +139,9 @@
                             <tr>
                                 <td>{{ detail['monthyear'] }}</td>
                                 <td>{{ detail['itemname'] }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ detail['typename'] }}</span>
+                                </td>
                                 <td class="text-end">
                                     <span class="badge bg-primary">{{ "%.1f"|format(detail['percent']) }}%</span>
                                 </td>
@@ -160,36 +164,79 @@
 {% if loading_details %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Prepare data for Chart.js
+// Prepare data for stacked bar chart grouped by item TYPE
 const loadingData = {{ loading_details|tojson }};
 
-// Group by month and sum percentages
+console.log('Loading data:', loadingData);
+
+// Group by month and item type (typename)
 const monthlyData = {};
+const itemTypes = new Set();
+
 loadingData.forEach(record => {
-    if (!monthlyData[record.monthyear]) {
-        monthlyData[record.monthyear] = 0;
+    const month = record.monthyear;
+    const typename = record.typename;
+    const percent = record.percent;
+
+    if (!monthlyData[month]) {
+        monthlyData[month] = {};
     }
-    monthlyData[record.monthyear] += record.percent;
+
+    if (!monthlyData[month][typename]) {
+        monthlyData[month][typename] = 0;
+    }
+
+    // Aggregate all items of the same type
+    monthlyData[month][typename] += percent;
+    itemTypes.add(typename);
 });
 
-// Sort months
+// Sort months and types
 const sortedMonths = Object.keys(monthlyData).sort();
-const percentages = sortedMonths.map(month => monthlyData[month]);
+const sortedTypes = Array.from(itemTypes).sort();
 
-// Create chart
+console.log('Months:', sortedMonths);
+console.log('Item types:', sortedTypes);
+
+// Color palette for different item types
+const colors = {
+    'STATION': 'rgba(54, 162, 235, 0.8)',    // Blue
+    'RESOURCE': 'rgba(255, 99, 132, 0.8)',   // Red
+    'UNIT': 'rgba(75, 192, 192, 0.8)',       // Teal
+    'PRODUCT': 'rgba(255, 206, 86, 0.8)',    // Yellow
+};
+
+// Create datasets - one per item type
+const datasets = sortedTypes.map((typename, idx) => {
+    const fallbackColors = [
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 159, 64, 0.8)',
+        'rgba(199, 199, 199, 0.8)',
+        'rgba(83, 102, 255, 0.8)',
+        'rgba(255, 99, 255, 0.8)',
+        'rgba(99, 255, 132, 0.8)'
+    ];
+
+    const color = colors[typename] || fallbackColors[idx % fallbackColors.length];
+
+    return {
+        label: typename,
+        data: sortedMonths.map(month => monthlyData[month][typename] || 0),
+        backgroundColor: color,
+        borderColor: color.replace('0.8', '1'),
+        borderWidth: 1
+    };
+});
+
+console.log('Datasets:', datasets);
+
+// Create stacked bar chart
 const ctx = document.getElementById('loadingChart').getContext('2d');
 new Chart(ctx, {
-    type: 'line',
+    type: 'bar',
     data: {
         labels: sortedMonths,
-        datasets: [{
-            label: 'Total Loading %',
-            data: percentages,
-            borderColor: 'rgb(75, 192, 192)',
-            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-            tension: 0.1,
-            fill: true
-        }]
+        datasets: datasets
     },
     options: {
         responsive: true,
@@ -197,24 +244,40 @@ new Chart(ctx, {
         plugins: {
             title: {
                 display: true,
-                text: 'Loading Percentage Over Time'
+                text: 'Loading by Item Type Over Time'
             },
             legend: {
-                display: false
+                display: true,
+                position: 'top'
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    footer: function(tooltipItems) {
+                        let total = 0;
+                        tooltipItems.forEach(function(tooltipItem) {
+                            total += tooltipItem.parsed.y;
+                        });
+                        return 'Total: ' + total.toFixed(1) + '%';
+                    }
+                }
             }
         },
         scales: {
-            y: {
-                beginAtZero: true,
-                title: {
-                    display: true,
-                    text: 'Percentage (%)'
-                }
-            },
             x: {
+                stacked: true,
                 title: {
                     display: true,
                     text: 'Month'
+                }
+            },
+            y: {
+                stacked: true,
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'Loading Percentage (%)'
                 }
             }
         }
