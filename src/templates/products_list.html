@@ -52,7 +52,7 @@
                         </a>
 
                         <!-- Enhanced Allocation (NEW!) -->
-                        <a href="{{ url_for('product_loading_enhanced.enhanced_allocation_interface', product_id=product['id']) }}"
+                        <a href="{{ url_for('product_loading.enhanced_allocation_interface', product_id=product['id']) }}"
                            class="btn btn-sm btn-warning"
                            title="Select specific items and assign percentages">
                             <i class="bi bi-sliders"></i> Enhanced
@@ -107,8 +107,10 @@
         <h6>Action Buttons:</h6>
         <ul class="mb-0">
             <li><strong>View:</strong> See which items are mapped to this product and usage statistics</li>
-            <li><strong>Enhanced <span class="badge bg-warning">NEW</span>:</strong> Select specific items by characteristics (location, capacity, etc.) and assign percentage allocations across multiple months in a visual grid</li>
-            <li><strong>Loading:</strong> Manage traditional month-to-month resource requirements by item type</li>
+            <li><strong>Enhanced <span class="badge bg-warning">NEW</span>:</strong> Select specific items by characteristics (location, capacity, etc.) and assign percentage allocations across multiple months</li>
+            <li><strong>Loading:</strong> View standard loading profile showing month-to-month requirements</li>
+            <li><strong>Edit:</strong> Change the product name</li>
+            <li><strong>Delete:</strong> Remove the product (only if not in use)</li>
         </ul>
     </div>
 </div>

@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-calendar-check"></i> Loading Profile: {{ product.itemname }}
+                </h2>
+                <div>
+                    <a href="{{ url_for('product_loading.enhanced_allocation_interface', product_id=product.id) }}" 
+                       class="btn btn-warning">
+                        <i class="bi bi-sliders"></i> Enhanced Allocation
+                    </a>
+                    <a href="{{ url_for('products.view_mappings', id=product.id) }}" 
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Product
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if loading_data %}
+    <div class="row">
+        <div class="col-12">
+            <!-- Summary Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Loading Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <h3 class="display-6">{{ loading_data|length }}</h3>
+                            <p class="text-muted">Total Records</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h3 class="display-6">{{ loading_data|map(attribute='monthyear')|unique|list|length }}</h3>
+                            <p class="text-muted">Months</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h3 class="display-6">{{ loading_data|map(attribute='itemname')|unique|list|length }}</h3>
+                            <p class="text-muted">Items</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline Chart -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Monthly Loading Timeline</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="loadingChart" style="max-height: 400px;"></canvas>
+                </div>
+            </div>
+
+            <!-- Detailed Table -->
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Detailed Loading Records</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Item Name</th>
+                                    <th>Item Type</th>
+                                    <th class="text-end">Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in loading_data|sort(attribute='monthyear') %}
+                                <tr>
+                                    <td><strong>{{ record['monthyear'] }}</strong></td>
+                                    <td>{{ record['itemname'] }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ record['typename'] }}</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="badge bg-primary">{{ "%.1f"|format(record['percent']) }}%</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    // Prepare data for Chart.js
+    const loadingData = {{ loading_data|tojson }};
+
+    // Group by month and aggregate
+    const monthlyData = {};
+    const itemsByMonth = {};
+    
+    loadingData.forEach(record => {
+        const month = record.monthyear;
+        if (!monthlyData[month]) {
+            monthlyData[month] = 0;
+            itemsByMonth[month] = {};
+        }
+        monthlyData[month] += record.percent;
+        
+        // Track by item type
+        const typename = record.typename;
+        if (!itemsByMonth[month][typename]) {
+            itemsByMonth[month][typename] = 0;
+        }
+        itemsByMonth[month][typename] += record.percent;
+    });
+
+    // Sort months
+    const sortedMonths = Object.keys(monthlyData).sort();
+    const totalPercentages = sortedMonths.map(month => monthlyData[month]);
+
+    // Get unique item types
+    const itemTypes = [...new Set(loadingData.map(r => r.typename))];
+    const colors = [
+        'rgb(255, 99, 132)',
+        'rgb(54, 162, 235)',
+        'rgb(255, 205, 86)',
+        'rgb(75, 192, 192)',
+        'rgb(153, 102, 255)',
+        'rgb(255, 159, 64)'
+    ];
+
+    // Create datasets for each item type
+    const datasets = [{
+        label: 'Total Loading',
+        data: totalPercentages,
+        borderColor: 'rgb(75, 192, 192)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        tension: 0.1,
+        fill: true,
+        borderWidth: 3
+    }];
+
+    // Add dataset for each item type
+    itemTypes.forEach((typename, idx) => {
+        const data = sortedMonths.map(month => 
+            itemsByMonth[month][typename] || 0
+        );
+        datasets.push({
+            label: typename,
+            data: data,
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+            tension: 0.1,
+            borderWidth: 2
+        });
+    });
+
+    // Create chart
+    const ctx = document.getElementById('loadingChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sortedMonths,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Loading Percentage Over Time',
+                    font: {
+                        size: 16
+                    }
+                },
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            label += context.parsed.y.toFixed(1) + '%';
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Percentage (%)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                }
+            }
+        }
+    });
+    </script>
+
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                <strong>No Loading Data</strong>
+                <p class="mb-0">
+                    This product doesn't have any loading records yet. 
+                    <a href="{{ url_for('product_loading.enhanced_allocation_interface', product_id=product.id) }}" class="alert-link">
+                        Click here to add allocations using the Enhanced Allocation interface.
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

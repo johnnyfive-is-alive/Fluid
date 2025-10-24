@@ -78,6 +78,51 @@ def enhanced_allocation_interface(product_id):
     )
 
 
+@bp.get('/view/<int:product_id>')
+def view_product_loading(product_id):
+    """
+    View product loading profile - shows month-by-month resource requirements.
+    This is the standard view (not the enhanced allocation interface).
+    """
+    db = get_db()
+
+    # Get product details
+    product = db.get_item_by_id(product_id)
+    if not product:
+        flash('Product not found.', 'danger')
+        return redirect(url_for('products.list_products'))
+
+    # Verify it's a product
+    product_type = db.get_itemtype_by_id(product['fkitemtype'])
+    if not product_type or product_type['typename'] != 'PRODUCT':
+        flash('Item is not a product.', 'danger')
+        return redirect(url_for('products.list_products'))
+
+    # Get loading data for this product
+    loading_query = '''
+        SELECT 
+            il.monthyear,
+            i.itemname,
+            it.typename,
+            il.percent
+        FROM itemloading il
+        JOIN items i ON il.fkitem = i.id
+        JOIN itemtypes it ON i.fkitemtype = it.id
+        WHERE il.fkproduct = ?
+        ORDER BY il.monthyear, i.itemname
+    '''
+    loading_data_rows = db._execute(loading_query, (product_id,)).fetchall()
+
+    # Convert Row objects to dictionaries for JSON serialization
+    loading_data = [dict(row) for row in loading_data_rows]
+
+    return render_template(
+        'product_loading_profile.html',
+        product=product,
+        loading_data=loading_data
+    )
+
+
 @bp.post('/<int:product_id>/filter-items')
 def filter_items(product_id):
     """
@@ -169,32 +214,30 @@ def get_allocations(product_id):
     db = get_db()
 
     try:
-        month = request.form.get('month', '').strip()
-        item_ids = request.form.getlist('item_ids[]', type=int)
+        month = request.form.get('month')
+        item_ids = request.form.getlist('item_ids[]')
 
         if not month or not item_ids:
-            return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Missing month or item_ids'
+            }), 400
 
         # Get existing allocations
         placeholders = ','.join(['?'] * len(item_ids))
         query = f'''
-            SELECT 
-                il.fkitem,
-                il.percent
-            FROM itemloading il
-            WHERE il.fkproduct = ?
-                AND il.monthyear = ?
-                AND il.fkitem IN ({placeholders})
+            SELECT fkitem, percent
+            FROM itemloading
+            WHERE fkproduct = ?
+            AND monthyear = ?
+            AND fkitem IN ({placeholders})
         '''
 
-        params = [product_id, month] + item_ids
+        params = [product_id, month] + [int(id) for id in item_ids]
         results = db._execute(query, tuple(params)).fetchall()
 
         # Convert to dict
-        allocations = {
-            row['fkitem']: row['percent']
-            for row in results
-        }
+        allocations = {row['fkitem']: row['percent'] for row in results}
 
         return jsonify({
             'success': True,
@@ -211,134 +254,58 @@ def get_allocations(product_id):
 @bp.post('/<int:product_id>/save-allocations')
 def save_allocations(product_id):
     """
-    Save product loading allocations for selected items and months.
-    Handles multiple items and multiple months.
+    Save allocation percentages for items to this product.
     """
     db = get_db()
 
     try:
-        # Get product
-        product = db.get_item_by_id(product_id)
-        if not product:
+        allocations = request.json
+
+        if not allocations:
             return jsonify({
                 'success': False,
-                'error': 'Product not found'
-            }), 404
-
-        # Get form data
-        allocations_data = request.get_json()
-
-        if not allocations_data:
-            return jsonify({
-                'success': False,
-                'error': 'No allocation data provided'
+                'error': 'No allocations provided'
             }), 400
 
-        saved_count = 0
-        updated_count = 0
-        deleted_count = 0
-
         # Process each allocation
-        for allocation in allocations_data:
-            item_id = allocation.get('item_id')
-            month = allocation.get('month')
-            percent = allocation.get('percent')
+        for alloc in allocations:
+            item_id = alloc['item_id']
+            month = alloc['month']
+            percent = alloc['percent']
 
-            if not item_id or not month:
-                continue
+            # Check if allocation exists
+            existing_query = '''
+                SELECT id FROM itemloading
+                WHERE fkitem = ? AND fkproduct = ? AND monthyear = ?
+            '''
+            existing = db._execute(existing_query, (item_id, product_id, month)).fetchone()
 
-            # Handle deletion (percent = 0 or None)
-            if percent is None or float(percent) <= 0:
-                # Delete existing allocation
-                delete_query = '''
-                    DELETE FROM itemloading 
-                    WHERE fkitem = ? 
-                        AND monthyear = ? 
-                        AND fkproduct = ?
-                '''
-                db._execute(delete_query, (item_id, month, product_id))
-                deleted_count += 1
-            else:
-                # Check if allocation exists
-                check_query = '''
-                    SELECT id, percent 
-                    FROM itemloading 
-                    WHERE fkitem = ? 
-                        AND monthyear = ? 
-                        AND fkproduct = ?
-                '''
-                existing = db._execute(check_query, (item_id, month, product_id)).fetchone()
-
+            if percent == 0 and existing:
+                # Delete if percent is 0
+                db._execute('DELETE FROM itemloading WHERE id = ?', (existing['id'],))
+            elif percent > 0:
                 if existing:
                     # Update existing
-                    if float(existing['percent']) != float(percent):
-                        update_query = '''
-                            UPDATE itemloading 
-                            SET percent = ? 
-                            WHERE id = ?
-                        '''
-                        db._execute(update_query, (float(percent), existing['id']))
-                        updated_count += 1
+                    db._execute(
+                        'UPDATE itemloading SET percent = ? WHERE id = ?',
+                        (percent, existing['id'])
+                    )
                 else:
                     # Insert new
-                    insert_query = '''
-                        INSERT INTO itemloading 
-                        (fkitem, monthyear, percent, fkproduct, dailyrollupexists) 
-                        VALUES (?, ?, ?, ?, 0)
-                    '''
-                    db._execute(insert_query, (item_id, month, float(percent), product_id))
-                    saved_count += 1
+                    db._execute(
+                        'INSERT INTO itemloading (fkitem, fkproduct, monthyear, percent) VALUES (?, ?, ?, ?)',
+                        (item_id, product_id, month, percent)
+                    )
 
-        # Commit transaction
         db.con.commit()
 
         return jsonify({
             'success': True,
-            'message': f'Saved {saved_count} new, updated {updated_count}, deleted {deleted_count} allocations',
-            'saved': saved_count,
-            'updated': updated_count,
-            'deleted': deleted_count
+            'message': f'Saved {len(allocations)} allocation(s)'
         })
 
     except Exception as e:
         db.con.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@bp.post('/<int:product_id>/get-characteristic-values')
-def get_characteristic_values(product_id):
-    """
-    AJAX endpoint to get unique values for a characteristic key.
-    Helps populate the characteristic value dropdown.
-    """
-    db = get_db()
-
-    try:
-        char_key = request.form.get('char_key', '').strip()
-
-        if not char_key:
-            return jsonify({'success': False, 'error': 'No key provided'}), 400
-
-        query = '''
-            SELECT DISTINCT itemvalue 
-            FROM itemcharacteristics 
-            WHERE itemkey = ? 
-            ORDER BY itemvalue
-        '''
-
-        values = db._execute(query, (char_key,)).fetchall()
-
-        values_list = [row['itemvalue'] for row in values]
-
-        return jsonify({
-            'success': True,
-            'values': values_list
-        })
-
-    except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e)

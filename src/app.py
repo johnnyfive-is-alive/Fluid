@@ -91,7 +91,8 @@ def create_app() -> Flask:
     app.register_blueprint(units_bp, url_prefix='/units')
     app.register_blueprint(availability_bp, url_prefix='/availability')
     app.register_blueprint(ai_query_bp, url_prefix='/ai-query')
-    app.register_blueprint(productloading_bp,url_prefix='/product_loading')
+    # FIXED: Remove url_prefix since blueprint defines it internally as '/product-loading'
+    app.register_blueprint(productloading_bp)
 
     @app.get('/')
     def home():

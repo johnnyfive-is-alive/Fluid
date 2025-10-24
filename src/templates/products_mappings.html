@@ -8,7 +8,7 @@
             </h2>
             <div>
                 <!-- Enhanced Allocation Button (NEW!) -->
-                <a href="{{ url_for('product_loading_enhanced.enhanced_allocation_interface', product_id=product.id) }}"
+                <a href="{{ url_for('product_loading.enhanced_allocation_interface', product_id=product.id) }}"
                    class="btn btn-warning">
                     <i class="bi bi-sliders"></i> Enhanced Allocation
                 </a>
@@ -107,20 +107,30 @@
             </div>
         </div>
 
-        <!-- Loading details by month -->
+        <!-- Loading Timeline Chart -->
         {% if loading_details %}
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Loading Details by Month</h5>
+                <h5 class="mb-0">Loading Timeline</h5>
             </div>
             <div class="card-body">
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <canvas id="loadingChart" style="max-height: 400px;"></canvas>
+            </div>
+        </div>
+
+        <!-- Detailed Loading Records -->
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Detailed Loading Records</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
                     <table class="table table-sm table-hover">
-                        <thead class="table-light sticky-top">
+                        <thead>
                             <tr>
                                 <th>Month</th>
                                 <th>Item</th>
-                                <th class="text-end">Percent</th>
+                                <th class="text-end">Percentage</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -128,7 +138,9 @@
                             <tr>
                                 <td>{{ detail['monthyear'] }}</td>
                                 <td>{{ detail['itemname'] }}</td>
-                                <td class="text-end">{{ "%.1f"|format(detail['percent']) }}%</td>
+                                <td class="text-end">
+                                    <span class="badge bg-primary">{{ "%.1f"|format(detail['percent']) }}%</span>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -136,15 +148,78 @@
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            No loading records exist for this product yet. Use the "Enhanced Allocation" or "Loading Profile" buttons above to add allocations.
+        </div>
         {% endif %}
     </div>
 </div>
 
-<style>
-.sticky-top {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-</style>
+{% if loading_details %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Prepare data for Chart.js
+const loadingData = {{ loading_details|tojson }};
+
+// Group by month and sum percentages
+const monthlyData = {};
+loadingData.forEach(record => {
+    if (!monthlyData[record.monthyear]) {
+        monthlyData[record.monthyear] = 0;
+    }
+    monthlyData[record.monthyear] += record.percent;
+});
+
+// Sort months
+const sortedMonths = Object.keys(monthlyData).sort();
+const percentages = sortedMonths.map(month => monthlyData[month]);
+
+// Create chart
+const ctx = document.getElementById('loadingChart').getContext('2d');
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: sortedMonths,
+        datasets: [{
+            label: 'Total Loading %',
+            data: percentages,
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.1,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            title: {
+                display: true,
+                text: 'Loading Percentage Over Time'
+            },
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'Percentage (%)'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: 'Month'
+                }
+            }
+        }
+    }
+});
+</script>
+{% endif %}
 {% endblock %}
