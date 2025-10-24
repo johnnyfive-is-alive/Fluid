@@ -508,3 +508,129 @@ def save_allocations(product_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+@bp.get('/<int:product_id>/get-item-characteristics/<int:item_id>')
+def get_item_characteristics(product_id, item_id):
+    """
+    AJAX endpoint to get characteristics for a specific item.
+    Returns JSON list of characteristics.
+    """
+    db = get_db()
+
+    try:
+        # Get characteristics for this item
+        query = '''
+            SELECT itemkey, itemvalue
+            FROM itemcharacteristics
+            WHERE fkitem = ?
+            ORDER BY itemkey
+        '''
+
+        results = db._execute(query, (item_id,)).fetchall()
+
+        # Convert to JSON-serializable format
+        characteristics = [
+            {
+                'itemkey': row['itemkey'],
+                'itemvalue': row['itemvalue']
+            }
+            for row in results
+        ]
+
+        return jsonify({
+            'success': True,
+            'characteristics': characteristics,
+            'count': len(characteristics)
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+    # Also update the save_allocations endpoint to use the correct database method
+    # The save_allocations endpoint should call db.upsert_loading instead of db.upsert_item_loading
+    # Here's the corrected version:
+
+    @bp.post('/<int:product_id>/save-allocations')
+    def save_allocations(product_id):
+        """
+        Save allocation percentages for items to this product.
+        This updates the itemloading table (actual item assignments), not product loading requirements.
+        """
+        db = get_db()
+
+        try:
+            data = request.get_json()
+            allocations = data if isinstance(data, list) else data.get('allocations', [])
+
+            if not allocations:
+                return jsonify({
+                    'success': False,
+                    'error': 'No allocations provided'
+                }), 400
+
+            # Process each allocation
+            saved_count = 0
+            deleted_count = 0
+
+            for alloc in allocations:
+                item_id = alloc.get('item_id')
+                month = alloc.get('month')
+                percent = alloc.get('percent')
+
+                if item_id is None or not month:
+                    continue
+
+                # Validate percent
+                try:
+                    percent = float(percent) if percent else 0
+                    if percent < 0:
+                        percent = 0
+                    if percent > 100:
+                        percent = 100
+                except (ValueError, TypeError):
+                    percent = 0
+
+                # If percent is 0, delete the entry
+                if percent == 0:
+                    # Check if exists and delete
+                    cur = db._execute(
+                        '''SELECT id FROM itemloading 
+                           WHERE fkitem = ? AND monthyear = ? AND fkproduct = ?''',
+                        (item_id, month, product_id)
+                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        db.delete_loading(existing['id'])
+                        deleted_count += 1
+                else:
+                    # Upsert the loading
+                    db.upsert_loading(
+                        fkitem=item_id,
+                        monthyear=month,
+                        percent=percent,
+                        fkproduct=product_id
+                    )
+                    saved_count += 1
+
+            db.con.commit()
+
+            return jsonify({
+                'success': True,
+                'message': f'Successfully saved {saved_count} allocation(s) and removed {deleted_count} allocation(s).',
+                'saved_count': saved_count,
+                'deleted_count': deleted_count
+            })
+
+        except Exception as e:
+            db.con.rollback()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+
